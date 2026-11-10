@@ -13,3 +13,4 @@ gradle.log
 android/.gradle/
 holdem-royale-*.apk
 holdem-royale-*.aab
+tools/pydeps/

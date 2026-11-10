@@ -1537,5 +1537,8 @@
   if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
-  window.__hld = { G, S, career, startSession, MAPS };
+  window.__hld = {
+    G, S, career, startSession, MAPS, sfx, audio,
+    graph: () => ({ ac, master, comp })
+  };
 })();

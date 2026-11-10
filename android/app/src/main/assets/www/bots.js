@@ -404,11 +404,12 @@
       // Short stack: shove or fold, judged on equity against the price.
       if (stackBB <= 12) {
         const need = toCall > 0 ? toCall / (pot + toCall) : 0;
-        const callNeed = need + 0.03 - maniac * 0.06 - stick * 0.03 - (1 - skill) * 0.02;
+        const handEq = clamp(0.16 + ps * 0.66, 0, 0.95);
+        const callNeed = need + 0.02 - maniac * 0.06 - stick * 0.04 - (1 - skill) * 0.02;
         if (canRaise && (ps > 0.54 - bot.vpip * 0.1 || (pos && ps > 0.46 && R() < 0.5))) {
           return raiseTo(maxTo);
         }
-        if (toCall > 0) return eqN > callNeed ? { type: 'call' } : { type: 'fold' };
+        if (toCall > 0) return handEq > callNeed ? { type: 'call' } : { type: 'fold' };
         return { type: 'call' };
       }
 
@@ -434,8 +435,9 @@
       // Facing an open: 3-bet the top of the range, defend by price.
       if (toCall >= myChips * 0.55) {
         const need = toCall / (pot + toCall);
-        const exploit = maniac * 0.1 + aggroRead * 0.05 + stick * 0.04 + (loose - 1) * 0.05;
-        if (eqN > need + 0.02 - exploit) return { type: 'call' };
+        const handEq = clamp(0.16 + ps * 0.66, 0, 0.95);
+        const exploit = maniac * 0.12 + aggroRead * 0.05 + stick * 0.05 + (loose - 1) * 0.05;
+        if (handEq > need + 0.02 - exploit) return { type: 'call' };
         if (pair && ps > 0.55 && R() < 0.4) return { type: 'call' };
         if (suited && conn && ps > 0.4 && R() < 0.22) return { type: 'call' };
         return { type: 'fold' };
@@ -457,10 +459,16 @@
     const flushDraw = !!tex.flushDraw;
     const straightDraw = (tex.straightOuts || 0) >= 2;
     const draw = flushDraw || straightDraw;
-    const monster = made >= 5 || (made >= 3 && eqN > 0.8) || eqN > 0.92;
-    const strong = eqN > 0.68 + multi * 0.06;
-    const medium = eqN > 0.46;
-    const air = made <= 0 || (made === 1 && eqN < 0.34);
+    // A call is priced against the bettor, not the whole table. Multi-way
+    // equity made routine hands look worthless and caused mass over-folding.
+    const eqHU = nOpp > 1
+      ? Core.equity(hole, board, 1, Math.max(120, Math.round(bot.sims * 0.7)), R)
+      : eq;
+    const callEq = clamp(eqHU + noise * 0.6, 0, 1);
+    const monster = made >= 5 || (made >= 3 && callEq > 0.8) || callEq > 0.92;
+    const strong = callEq > 0.68;
+    const medium = callEq > 0.46;
+    const air = made <= 0 || (made === 1 && callEq < 0.34);
     const boardScary = !!tex.wet || !!tex.paired || (tex.broadway || 0) >= 3;
     const street = x.street || 1;
     const foldEq = clamp(0.28 + tableFold * 0.5 + (boardScary ? 0.08 : 0)
@@ -507,16 +515,19 @@
       return { type: 'call' };
     }
 
-    const implied = draw && street < 3 ? 0.05 : 0;
-    const bluffCatch = aggroRead > 0.5 ? 0.03 : 0;
-    const need = potOdds + 0.02 + multi * 0.02 - stick * 0.08 - implied
-      - maniac * 0.04 - bluffCatch + (1 - skill) * 0.02;
+    const implied = draw && street < 3 ? 0.06 : 0;
+    const bluffCatch = clamp((aggroRead - 0.45) * 0.12, 0, 0.06);
+    // The price, with small exploit adjustments. A flat safety tax here made
+    // bots surrender routinely priced hands; a call now needs equity above the
+    // real pot odds, not above them plus a premium.
+    const need = potOdds + 0.01 - implied - stick * 0.04 - maniac * 0.05
+      - bluffCatch + (1 - skill) * 0.015;
 
     if (toCall >= myChips * 0.75) {
-      const shoveNeed = need - stick * 0.03 - maniac * 0.05;
-      if (monster || eqN > shoveNeed + 0.04) return { type: 'call' };
-      if (draw && street < 3 && eqN > shoveNeed - 0.02) return { type: 'call' };
-      if (made >= 2 && R() < bot.callDown * 0.4) return { type: 'call' };
+      const shoveNeed = need + 0.01 - maniac * 0.05 - stick * 0.02;
+      if (monster || callEq > shoveNeed) return { type: 'call' };
+      if (draw && street < 3 && callEq > shoveNeed - 0.03) return { type: 'call' };
+      if (made >= 2 && R() < 0.4 + bot.callDown * 0.35) return { type: 'call' };
       return { type: 'fold' };
     }
 
@@ -530,18 +541,23 @@
       if (canRaise && R() < aggr * 0.5) return sizeTo(0.9);
       return { type: 'call' };
     }
-    if (eqN > need + 0.06) {
-      if (canRaise && medium && R() < aggr * 0.18) return sizeTo(0.85);
+    if (callEq > need + 0.02) {
+      if (canRaise && medium && R() < aggr * 0.2) return sizeTo(0.85);
       return { type: 'call' };
     }
-    if (draw && toCall < pot * 0.4 && eqN > need - 0.02) {
-      if (canRaise && R() < 0.16 + aggr * 0.16) return sizeTo(1.0);
+    // Small prices: defend any pair, draw or live overcards instead of folding.
+    if (toCall <= Math.max(bb, pot * 0.18) && (made >= 1 || draw || callEq > need - 0.04)) {
+      if (canRaise && draw && R() < aggr * 0.2) return sizeTo(1.0);
+      return { type: 'call' };
+    }
+    if (draw && toCall < pot * 0.45 && callEq > need - 0.03) {
+      if (canRaise && R() < 0.16 + aggr * 0.18) return sizeTo(1.0);
       return { type: 'call' };
     }
     if (canRaise && air && R() < bot.bluff * 0.5 * (0.5 + foldEq) && toCall < pot * 0.5) {
       return sizeTo(boardScary ? 1.05 : 0.8);
     }
-    if (toCall <= Math.max(bb, pot * 0.09) && eqN > need - 0.03 && R() < 0.3 + bot.callDown * 0.35) {
+    if (made >= 1 && callEq > need - 0.06 && R() < 0.4 + bot.callDown * 0.3) {
       return { type: 'call' };
     }
     bot.plan = null;
