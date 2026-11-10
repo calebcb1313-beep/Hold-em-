@@ -389,3 +389,8 @@ input[type=range]::-moz-range-thumb{background:#d8ad63;border-radius:3px}
 .act.call{background:linear-gradient(180deg,#463223,#2a1a0c)}
 .act.raise{background:linear-gradient(180deg,#f0d094,#d8a85e 58%,#b98438)}
 .act.raise:disabled{filter:saturate(.6) brightness(.82)}
+
+/* pass 4: the floor strip must sit behind the action bar, not over it */
+#table:after{height:13%;opacity:.9}
+#actions{position:relative;z-index:4}
+#actions .act:disabled{opacity:1;filter:none}
