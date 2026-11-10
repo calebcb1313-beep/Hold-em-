@@ -22,8 +22,10 @@
   let S = Object.assign({}, DEFAULTS, store.get('settings', {}));
   const saveSettings = () => store.set('settings', S);
 
-  const CAREER0 = { bankroll: 5000, xp: 0, cleared: 0, tables: 0, hands: 0, won: 0, bestPot: 0, bestHand: '', bestLevel: 1 };
+  const CAREER0 = { bankroll: 5000, xp: 0, cleared: 0, tables: 0, hands: 0, won: 0, bestPot: 0, bestHand: '', bestLevel: 1, tournamentWins: 0, trophies: {} };
   let career = Object.assign({}, CAREER0, store.get('career', {}));
+  career.trophies = career.trophies || {};
+  career.tournamentWins = career.tournamentWins || 0;
   const saveCareer = () => store.set('career', career);
 
   /* ================= sound ================= */
@@ -184,7 +186,8 @@
     $('#mContinue').hidden = !sess;
     if (sess) $('#mContinue').textContent = 'Continue \u00B7 ' + fmt(sess.chips) + ' chips';
     const cleared = career.cleared;
-    $('#mProgress').textContent = cleared + ' / ' + MAPS.length + ' tables cleared';
+    $('#mProgress').textContent = cleared + ' / ' + MAPS.length + ' tables cleared' +
+      (trophyCount() ? ' - ' + trophyCount() + ' trophies' : '');
     const statsEl = $('#mStats');
     statsEl.innerHTML = '';
     [[career.hands, 'hands'], [career.won, 'pots won'], [fmtK(career.bestPot), 'best pot']].forEach(([v, k]) => {
@@ -205,9 +208,18 @@
     resumeSession(sess);
   };
   $('#mSettingsTop').onclick = () => { audio(); show('settings'); };
+  const modeToggle = $('#modeToggle');
+  if (modeToggle) {
+    $$('button', modeToggle).forEach((b) => {
+      b.onclick = () => { audio(); mapMode = b.dataset.mode || 'career'; renderMaps(); };
+    });
+  }
 
   /* ================= map screen ================= */
   function renderMaps() {
+    const toggle = $('#modeToggle');
+    if (toggle) $$('button', toggle).forEach((b) => b.classList.toggle('on', b.dataset.mode === mapMode));
+    if (mapMode === 'tournament') return renderTournamentMaps();
     const list = $('#mapList');
     list.innerHTML = '';
     MAPS.forEach((m, i) => {
@@ -235,6 +247,72 @@
       list.appendChild(el);
     });
   }
+  let mapMode = 'career';
+  const tournamentPrize = (m) => Math.round((m.buyin * 5.4) / 100) * 100;
+  const tournamentStack = (m) => m.bb * 100;
+  const trophyCount = () => Object.keys(career.trophies || {}).reduce((n, k) => n + ((career.trophies || {})[k] || 0), 0);
+
+  function renderTournamentMaps() {
+    const list = $('#mapList');
+    list.innerHTML = '';
+    MAPS.forEach((m, i) => {
+      const unlocked = mapUnlocked(i);
+      const trophy = (career.trophies || {})[m.id] || 0;
+      const entry = m.buyin;
+      const afford = career.bankroll >= entry;
+      const el = document.createElement('button');
+      el.className = 'map-card' + (unlocked ? '' : ' locked') + (trophy ? ' cleared' : '');
+      el.style.setProperty('--acc', m.accent);
+      el.innerHTML =
+        '<div class="map-glyph">' + m.glyph + '</div>' +
+        '<div class="map-main">' +
+        '<div class="map-name">' + m.name + (trophy ? ' <em>' + trophy + 'x</em>' : '') + '</div>' +
+        '<div class="map-room">Sit and go - blinds rise every 8 hands</div>' +
+        '<div class="map-meta"><span>' + fmt(entry) + ' entry</span><span>6 players</span>' +
+        '<span>prize ' + fmt(tournamentPrize(m)) + '</span></div>' +
+        '</div>' +
+        '<div class="map-go">' + (unlocked ? (afford ? '>' : 'Need ' + fmt(entry - career.bankroll)) : 'Locked') + '</div>';
+      el.onclick = () => {
+        audio();
+        if (!unlocked) { toast('Clear ' + MAPS[i - 1].name + ' to unlock'); return; }
+        if (!afford) { toast('You need ' + fmt(entry) + ' chips to enter'); return; }
+        confirmTournament(i);
+      };
+      list.appendChild(el);
+    });
+  }
+
+  function confirmTournament(i) {
+    const m = MAPS[i];
+    modal(
+      '<div class="sheet-tag" style="--acc:' + m.accent + '">Sit and go</div>' +
+      '<h2>' + m.name + '</h2><p>Six players, equal stacks, blinds rise every 8 hands. Win it and take the prize, plus a circuit trophy.</p>' +
+      '<div class="kv"><div><span>Entry</span><b>' + fmt(m.buyin) + '</b></div>' +
+      '<div><span>Prize</span><b>' + fmt(tournamentPrize(m)) + '</b></div>' +
+      '<div><span>Stack</span><b>' + fmt(tournamentStack(m)) + '</b></div>' +
+      '<div><span>Blinds</span><b>' + fmt(m.bb / 2) + ' / ' + fmt(m.bb) + '</b></div></div>' +
+      '<button class="btn primary" id="go">Take a seat</button>' +
+      '<button class="btn ghost-wide" id="no">Not yet</button>',
+      (sh) => {
+        $('#go', sh).onclick = () => { closeModal(); enterTournament(i); };
+        $('#no', sh).onclick = closeModal;
+      }
+    );
+  }
+
+  function enterTournament(i) {
+    const m = MAPS[i];
+    if (!mapUnlocked(i)) return;
+    if (career.bankroll < m.buyin) { toast('Not enough chips to enter'); return; }
+    career.bankroll -= m.buyin;
+    saveCareer();
+    startSession({
+      mapIndex: i, mode: 'tournament', buyin: m.buyin, target: 0, skill: m.skill,
+      seats: 6, bb: m.bb, chips: tournamentStack(m), hand: 0,
+      entry: m.buyin, prize: tournamentPrize(m)
+    });
+  }
+
   function confirmBuyIn(i) {
     const m = MAPS[i];
     modal(
@@ -288,6 +366,8 @@
       ['Level', L.level + ' \u00B7 ' + fmt(L.cur) + '/' + fmt(L.need) + ' XP'],
       ['Bankroll', fmt(career.bankroll)],
       ['Tables cleared', career.cleared + ' / ' + MAPS.length],
+      ['Tournament wins', career.tournamentWins || 0],
+      ['Trophies', trophyCount()],
       ['Hands played', fmt(h)],
       ['Pots won', fmt(won) + (h ? ' (' + Math.round((won / h) * 100) + '%)' : '')],
       ['Biggest pot', fmt(career.bestPot)],
@@ -299,7 +379,7 @@
       '<p class="note">Progress is stored on this device only.</p>';
     $('#resetProgress').onclick = () => {
       if (!confirm('Reset bankroll, level and all table progress?')) return;
-      career = Object.assign({}, CAREER0);
+      career = Object.assign({}, CAREER0, { trophies: {} });
       saveCareer(); store.del('session'); renderStats(); toast('Progress reset');
     };
   }
@@ -426,7 +506,9 @@
     running: false, sid: 0, players: [], hero: null, dealer: -1, hand: 0, bb: 20, sb: 10,
     board: [], deck: [], turn: -1, pending: null, hl: null, cur: 0, minRaise: 20,
     over: false, mode: 'career', mapIndex: 0, map: MAPS[0], buyin: 1000, target: 2000,
-    skill: 0.3, seats: 4, acting: -1, hp: null
+    skill: 0.3, seats: 4, acting: -1, hp: null,
+    tournament: false, entry: 0, prize: 0, tLevel: 1, riseEvery: 8,
+    finish: 0, finalShown: false, lastRaiser: null
   };
   const LAYOUT_WIDE = {
     2: [[50, 82], [50, 17]],
@@ -464,7 +546,7 @@
 
   function makePlayerFromBot(bot, i, chips) {
     return {
-      i, bot, human: false, name: bot.name, hue: bot.hue, chips,
+      i, id: bot.id, bot, human: false, name: bot.name, hue: bot.hue, chips,
       hole: [], bet: 0, total: 0, folded: false, allin: false, out: false,
       tag: '', role: '', reveal: false, win: false, said: '', score: 0
     };
@@ -484,18 +566,22 @@
     G.buyin = o.buyin; G.target = o.target; G.skill = o.skill; G.seats = o.seats;
     G.bb = o.bb; G.sb = Math.floor(o.bb / 2);
     G.hand = o.hand || 0;
-    G.dealer = -1;
+    G.tournament = o.mode === 'tournament';
+    G.entry = o.entry || 0; G.prize = o.prize || 0;
+    G.tLevel = o.level || 1; G.riseEvery = 8; G.finish = 0; G.finalShown = false;
+    G.dealer = -1; G.lastRaiser = null;
     G.board = []; G.hl = null; G.turn = -1; G.over = false; G.acting = -1;
     G.hp = { hands: 0, shoves: 0, raises: 0, calls: 0, folds: 0, faced: 0, foldFaced: 0 };
 
     G.hero = {
-      i: 0, human: true, name: S.name || 'You', hue: 42, chips: o.chips,
+      i: 0, id: 'hero', human: true, name: S.name || 'You', hue: 42, chips: o.chips,
       hole: [], bet: 0, total: 0, folded: false, allin: false, out: false,
       tag: '', role: '', reveal: false, win: false, said: '', score: 0
     };
     G.players = [G.hero];
     const roster = B.makeRoster(G.seats - 1, G.skill);
-    roster.forEach((bot, k) => G.players.push(makePlayerFromBot(bot, k + 1, freshStack())));
+    roster.forEach((bot, k) => G.players.push(makePlayerFromBot(bot, k + 1,
+      G.tournament ? o.chips : freshStack())));
 
     buildTable();
     applyTheme();
@@ -510,7 +596,7 @@
   }
 
   function saveSession() {
-    if (!G.running || G.mode === 'quick') return;
+    if (!G.running || G.mode === 'quick' || G.tournament) return;
     store.set('session', {
       mapIndex: G.mapIndex, mode: G.mode, buyin: G.buyin, target: G.target,
       skill: G.skill, seats: G.seats, bb: G.bb, chips: Math.max(0, G.hero.chips), hand: G.hand
@@ -555,11 +641,12 @@
   }
 
   function seatBotInfo(el, p) {
+    if (!p.bot) return;
     const av = $('.avatar', el);
     av.style.background = 'linear-gradient(145deg,hsl(' + p.hue + ' 46% 46%),hsl(' + ((p.hue + 40) % 360) + ' 52% 26%))';
     $('.avatar span', el).textContent = (p.name || '?').replace(/[^A-Za-z0-9]/g, '').charAt(0).toUpperCase();
     $('.nm', el).textContent = p.name;
-    $('.read', el).textContent = p.bot ? B.read(p.bot) : '';
+    $('.read', el).textContent = p.bot ? B.readLive(p.bot) : '';
   }
 
   function render() {
@@ -606,6 +693,14 @@
 
   function updateGoal() {
     if (!G.hero) return;
+    if (G.tournament) {
+      const aliveNow = G.players.filter((p) => p.chips > 0).length;
+      $('#goalTxt').textContent = 'LVL ' + G.tLevel + ' - ' + aliveNow + ' left - ' +
+        fmt(G.sb) + '/' + fmt(G.bb);
+      $('#goalFill').style.width = Math.round(((G.seats - aliveNow) / Math.max(1, G.seats - 1)) * 100) + '%';
+      $('#tName').textContent = G.map.name + ' - ' + fmt(G.prize) + ' prize';
+      return;
+    }
     const chips = Math.max(0, G.hero.chips);
     $('#goalTxt').textContent = fmt(chips) + ' / ' + fmt(G.target);
     $('#goalFill').style.width = Math.min(100, (chips / G.target) * 100) + '%';
@@ -750,6 +845,27 @@
     p.chips -= a; p.bet += a; p.total += a;
     if (p.chips === 0) { p.allin = true; p.tag = 'ALL-IN'; }
   }
+  const ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st'
+    : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
+
+  // Bots watch every action and keep their own book on each opponent.
+  function observeAction(p, a, faced) {
+    const info = { pre: G.board.length === 0, type: a.type, faced };
+    G.players.forEach((q) => {
+      if (!q.human && q !== p && q.bot) B.noteAction(q.bot, p.id, info);
+    });
+    if (a.type === 'raise') G.lastRaiser = p;
+  }
+  function noteShowdowns() {
+    G.players.forEach((p) => {
+      if (!alive(p) || p.score == null) return;
+      const cat = C.category(p.score);
+      G.players.forEach((q) => {
+        if (!q.human && q !== p && q.bot) B.noteShowdown(q.bot, p.id, cat);
+      });
+    });
+  }
+
   function heroProfile() {
     const h = G.hp || { hands: 0, shoves: 0, raises: 0, calls: 0, folds: 0, faced: 0, foldFaced: 0 };
     const hands = Math.max(1, h.hands);
@@ -769,7 +885,9 @@
       hole: p.hole, board: G.board, pot: potTotal(), toCall: Math.max(0, G.cur - p.bet),
       cur: G.cur, minRaise: G.minRaise, myBet: p.bet, myChips: p.chips,
       nOpp: Math.max(1, others), bb: G.bb, sb: G.sb, street,
-      late: rel >= n - 3, nPlayers: n, heroProfile: heroProfile(), rng: Math.random
+      late: rel >= n - 3, nPlayers: n, heroProfile: heroProfile(), rng: Math.random,
+      reads: B.readsFor(p.bot, P.filter((q) => q !== p && alive(q)).map((q) => q.id),
+        G.lastRaiser && G.lastRaiser !== p ? G.lastRaiser.id : null)
     };
     return B.decide(p.bot, ctx);
   }
@@ -811,6 +929,7 @@
 
   async function betRound(first) {
     const P = G.players;
+    G.lastRaiser = null;
     G.cur = Math.max(0, ...P.map((p) => p.bet));
     const pending = new Set(P.filter(canAct).map((p) => p.i));
     let i = first, guard = 0;
@@ -836,15 +955,21 @@
         p.bot.seen++;
         p.bot.hands++;
         if (G.board.length === 0) {
+          p.bot.preDecisions++;
           if (a.type === 'raise') p.bot.pfrCount++;
           if (a.type !== 'fold') p.bot.vpipCount++;
-        } else if (a.type === 'raise') p.bot.aggrCount++;
+        } else {
+          p.bot.postDecisions++;
+          if (a.type === 'raise') p.bot.aggrCount++;
+        }
         if (a.type === 'fold' && Math.random() < 0.25) botSay(p, 'fold');
         else if (a.type === 'raise' && Math.random() < 0.3) botSay(p, 'raise');
         else if (a.type === 'call' && toCallNoRaise(p) && Math.random() < 0.2) botSay(p, 'call');
       }
       G.turn = -1; G.acting = -1;
+      const facedBet = Math.max(0, G.cur - p.bet) > 0;
       const raised = applyAction(p, a);
+      observeAction(p, a, facedBet);
       pending.delete(i);
       if (raised) P.forEach((q) => { if (q !== p && canAct(q)) pending.add(q.i); });
       render();
@@ -869,6 +994,20 @@
       p.tag = ''; p.role = ''; p.reveal = false; p.win = false; p.said = ''; p.score = 0;
     });
     G.hand++;
+    if (G.tournament) {
+      const lvl = 1 + Math.floor(Math.max(0, G.hand - 1) / G.riseEvery);
+      if (lvl > G.tLevel) {
+        G.tLevel = lvl;
+        G.bb = Math.max(G.bb + 1, Math.round((G.bb * 1.5) / 10) * 10);
+        G.sb = Math.floor(G.bb / 2);
+        toast('Level ' + G.tLevel + ' - blinds ' + fmt(G.sb) + ' / ' + fmt(G.bb));
+      }
+      const aliveNow = P.filter((p) => p.chips > 0).length;
+      if (!G.finalShown && aliveNow <= 3) {
+        G.finalShown = true;
+        banner('Final table', aliveNow + ' players left', 'win');
+      }
+    }
     G.over = false; G.board = []; G.hl = null; G.minRaise = G.bb; G.cur = 0; G.acting = -1;
     G.dealer = next(G.dealer < 0 ? P.length - 1 : G.dealer, (p) => !p.out);
     G.hp.hands++;
@@ -966,6 +1105,7 @@
     G.over = true;
     if (sd) P.forEach((p) => { if (alive(p)) p.reveal = true; });
     const { won, bestWinners } = resolvePot(sd);
+    if (sd) noteShowdowns();
     won.forEach((amt, p) => { p.chips += amt; p.win = true; });
     P.forEach((p) => { p.allin = false; });
     if (sd && bestWinners && bestWinners.length) {
@@ -1013,6 +1153,24 @@
         if (G.sid !== sid) return;
         G.running = true;
         saveSession();
+        if (G.tournament) {
+          const bustedBots = G.players.filter((p) => !p.human && p.chips <= 0 && !p.out);
+          const aliveNow = G.players.filter((p) => p.chips > 0).length;
+          if (bustedBots.length) {
+            bustedBots.forEach((p, k) => {
+              p.out = true;
+              p.folded = true;
+              p.place = aliveNow + bustedBots.length - k;
+              toast(p.name + ' busts - ' + ordinal(p.place));
+            });
+            render();
+          }
+          if (G.hero.chips <= 0) { await sleep(500); return tournamentBust(aliveNow + 1); }
+          if (aliveNow <= 1) { await sleep(500); return tournamentWon(); }
+          await waitNext();
+          if (G.sid !== sid) return;
+          continue;
+        }
         rotateSeats();
         const hero = G.hero;
         if (hero.chips <= 0) { await sleep(500); return busted(); }
@@ -1028,6 +1186,7 @@
   }
 
   function rotateSeats() {
+    if (G.tournament) return;
     for (let i = 1; i < G.players.length; i++) {
       const p = G.players[i];
       const leave = p.chips <= 0 || (G.hand > 6 && Math.random() < 0.012);
@@ -1126,6 +1285,53 @@
     );
   }
 
+  function tournamentWon() {
+    G.running = false;
+    store.del('session');
+    const m = G.map;
+    career.trophies[m.id] = (career.trophies[m.id] || 0) + 1;
+    career.tournamentWins = (career.tournamentWins || 0) + 1;
+    career.bankroll += G.prize;
+    addXp(500);
+    saveCareer();
+    sfx.level();
+    modal(
+      '<div class="sheet-tag">Tournament won</div>' +
+      '<h2>' + m.name + '</h2>' +
+      '<p>You outlasted five players and took the whole thing.</p>' +
+      '<div class="kv"><div><span>Prize</span><b>+' + fmt(G.prize) + '</b></div>' +
+      '<div><span>Trophies here</span><b>' + career.trophies[m.id] + '</b></div>' +
+      '<div><span>Bankroll</span><b>' + fmt(career.bankroll) + '</b></div></div>' +
+      '<button class="btn primary" id="again">Play again</button>' +
+      '<button class="btn ghost-wide" id="toMenu">Main menu</button>',
+      (sh) => {
+        $('#again', sh).onclick = () => { closeModal(); enterTournament(G.mapIndex); };
+        $('#toMenu', sh).onclick = () => { closeModal(); show('menu'); };
+      }
+    );
+  }
+
+  function tournamentBust(place) {
+    G.running = false;
+    store.del('session');
+    saveCareer();
+    sfx.lose();
+    const canRetry = career.bankroll >= G.buyin;
+    modal(
+      '<div class="sheet-tag danger">Knocked out</div>' +
+      '<h2>' + ordinal(place) + ' place</h2>' +
+      '<p>You finished ' + ordinal(place) + ' of 6 at ' + G.map.name + ' after ' + G.hand + ' hands.</p>' +
+      '<p class="note">Bankroll: ' + fmt(career.bankroll) + ' chips</p>' +
+      (canRetry ? '<button class="btn primary" id="retry">Re-enter - ' + fmt(G.buyin) + '</button>' : '') +
+      '<button class="btn ghost-wide" id="toMenu">Main menu</button>',
+      (sh) => {
+        const r = $('#retry', sh);
+        if (r) r.onclick = () => { closeModal(); enterTournament(G.mapIndex); };
+        $('#toMenu', sh).onclick = () => { closeModal(); show('menu'); };
+      }
+    );
+  }
+
   /* ================= pause / exit ================= */
   function abortGame() {
     G.sid++;
@@ -1177,7 +1383,18 @@
         };
         paint();
         $('#pr', sh).onclick = closeModal;
-        $('#pc', sh).onclick = cashOut;
+        const pcBtn = $('#pc', sh);
+        if (pcBtn) {
+          pcBtn.onclick = cashOut;
+          if (G.tournament) pcBtn.hidden = true;
+        }
+        if (G.tournament) {
+          const info = sh.querySelector('p');
+          if (info) info.textContent = G.map.name + ' - Level ' + G.tLevel + ', blinds ' +
+            fmt(G.sb) + '/' + fmt(G.bb) + ', ' + G.players.filter((p) => p.chips > 0).length + ' left';
+          const q = $('#pq', sh);
+          if (q) q.textContent = 'Forfeit tournament';
+        }
         $('#pq', sh).onclick = () => {
           abortGame(); store.del('session'); closeModal(); show('menu');
         };

@@ -172,6 +172,12 @@ input{font:inherit}
 .stat-row b{color:var(--ink);font-size:15px;text-align:right;padding-left:12px}
 
 /* maps */
+.mode-toggle{display:flex;background:rgba(0,0,0,.38);border:1px solid var(--line);border-radius:12px;
+  padding:3px;gap:3px;margin:0 0 14px}
+.mode-toggle button{flex:1;height:38px;border-radius:9px;color:var(--mute);font-weight:650;font-size:13.5px;
+  transition:background .15s,color .15s}
+.mode-toggle button.on{background:linear-gradient(180deg,#f3e2b6,#d9b473);color:var(--gold-ink);
+  box-shadow:0 3px 10px -4px rgba(226,189,119,.7)}
 .map-list{display:flex;flex-direction:column;gap:11px}
 .map-card{position:relative;display:flex;align-items:center;gap:14px;text-align:left;
   padding:16px 14px;border-radius:18px;overflow:hidden;

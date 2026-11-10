@@ -194,9 +194,12 @@
       mood: null,
       seen: 0,
       hands: 0,
+      preDecisions: 0,
+      postDecisions: 0,
       vpipCount: 0,
       pfrCount: 0,
-      aggrCount: 0
+      aggrCount: 0,
+      memory: {}
     }, strategyFor(a, r));
     bot.sims = Math.round(110 + band * 190);
     bot.tilt = 0;
@@ -247,6 +250,84 @@
     return style + ' \u00B7 ' + post;
   }
 
+  // ---- observed hand history: every bot builds its own book on every opponent ----
+  function ensureMemory(bot, id) {
+    const mem = bot.memory || (bot.memory = {});
+    let m = mem[id];
+    if (!m) {
+      m = mem[id] = {
+        seen: 0, vpip: 0, pfr: 0, bets: 0, calls: 0, folds: 0,
+        faced: 0, foldFaced: 0, showdowns: 0, strength: 0
+      };
+    }
+    return m;
+  }
+
+  function noteAction(bot, oppId, info) {
+    if (!bot || !oppId) return;
+    const m = ensureMemory(bot, oppId);
+    m.seen++;
+    if (info.pre) {
+      if (info.type !== 'fold') m.vpip++;
+      if (info.type === 'raise') m.pfr++;
+    }
+    if (info.faced) {
+      m.faced++;
+      if (info.type === 'fold') m.foldFaced++;
+    }
+    if (info.type === 'raise') m.bets++;
+    else if (info.type === 'fold') m.folds++;
+    else m.calls++;
+  }
+
+  function noteShowdown(bot, oppId, category) {
+    if (!bot || !oppId) return;
+    const m = ensureMemory(bot, oppId);
+    m.showdowns++;
+    m.strength += category;
+  }
+
+  function readsFor(bot, ids, aggressorId) {
+    const mem = (bot && bot.memory) || {};
+    let seen = 0, bets = 0, calls = 0, folds = 0, faced = 0, foldFaced = 0, show = 0, showSum = 0;
+    (ids || []).forEach((id) => {
+      const m = mem[id];
+      if (!m) return;
+      seen += m.seen; bets += m.bets; calls += m.calls; folds += m.folds;
+      faced += m.faced; foldFaced += m.foldFaced; show += m.showdowns; showSum += m.strength;
+    });
+    const confident = seen >= 4;
+    let aggAggr = 0.35, aggSeen = 0;
+    if (aggressorId && mem[aggressorId]) {
+      const a = mem[aggressorId];
+      aggSeen = a.seen;
+      aggAggr = a.bets / Math.max(1, a.bets + a.calls);
+    }
+    return {
+      hands: seen,
+      confident,
+      foldToBet: confident && faced ? foldFaced / faced : 0.35,
+      callRate: confident ? calls / Math.max(1, calls + folds) : 0.45,
+      aggression: confident ? bets / Math.max(1, bets + calls) : 0.35,
+      showdown: show ? showSum / show / 8 : 0.4,
+      aggAggr: aggSeen >= 2 ? aggAggr : 0.35
+    };
+  }
+
+  // Public read: what the human sees on the seat, built from real observed play.
+  function readLive(bot) {
+    if (!bot) return '';
+    const pre = bot.preDecisions || 0;
+    if (pre < 8) return '';
+    const v = bot.vpipCount / pre;
+    const p = bot.pfrCount / pre;
+    const post = Math.max(1, bot.postDecisions || 1);
+    const a = (bot.aggrCount || 0) / post;
+    const style = v >= 0.45 ? 'Loose' : v <= 0.2 ? 'Tight' : 'Balanced';
+    const postLabel = (a >= 0.22 || p >= 0.35) ? 'aggressive' : a <= 0.06 ? 'passive' : 'measured';
+    return style + ' - ' + postLabel;
+  }
+
   function chatFor(bot, kind, r) {
     const bank = bot.chat && bot.chat[kind];
     if (!bank || !bank.length) return '';
@@ -275,6 +356,10 @@
     const hero = x.heroProfile || {};
     const maniac = clamp(hero.maniac || 0, 0, 1);
     const stationHero = clamp(hero.callHappy || 0, 0, 1);
+    const reads = x.reads || {};
+    const tableFold = reads.confident ? clamp(reads.foldToBet, 0, 1) : 0.35;
+    const tableCall = reads.confident ? clamp(reads.callRate, 0, 1) : 0.45;
+    const aggroRead = clamp(reads.aggAggr == null ? 0.35 : reads.aggAggr, 0, 1);
 
     const m = bot.mood || (bot.mood = newMood(bot, R));
     const aggr = bot.aggr * m.aggr;
@@ -332,7 +417,7 @@
           if (canRaise && R() < aggr * 0.22) return raiseTo(openSize);
           return { type: 'call' };
         }
-        if (canRaise && x.late && R() < bot.bluff * 1.7 * aggr) return raiseTo(openSize);
+        if (canRaise && x.late && R() < bot.bluff * 1.7 * aggr * (1 + tableFold)) return raiseTo(openSize);
         return { type: 'fold' };
       }
 
@@ -348,7 +433,7 @@
         return { type: 'fold' };
       }
       const vsRaise = clamp(0.78 - (loose - 1) * 0.2 - (bot.callDown - 0.5) * 0.1
-        + multi * 0.07 - maniac * 0.15, 0.42, 0.9);
+        + multi * 0.07 - maniac * 0.15 - (aggroRead - 0.35) * 0.12, 0.42, 0.9);
       if (ps > 0.92 && canRaise && R() < 0.8) return raiseTo(Math.min(maxTo, Math.max(minTo, cur * 3)));
       if (ps > 0.74 && canRaise && R() < aggr * 0.5) return raiseTo(Math.max(minTo, cur * 2.6));
       if (ps > vsRaise) return { type: 'call' };
@@ -369,7 +454,8 @@
     const boardScary = tex.wet || tex.paired || tex.broadway >= 3;
 
     const bluffFreq = clamp(bot.bluff * (0.55 + aggr * 0.85) * (hero.foldsALot ? 1.55 : 1)
-      * (multi > 0.5 ? 0.7 : 1) * (stationHero > 0.5 ? 0.45 : 1), 0.005, 0.5);
+      * (multi > 0.5 ? 0.7 : 1) * (stationHero > 0.5 ? 0.45 : 1)
+      * (0.55 + tableFold * 1.35) * (1 - tableCall * 0.3), 0.005, 0.5);
     const trap = clamp(bot.trap * (monster ? 1 : 0.2), 0, 0.85);
 
     // Nobody has bet: check or take the initiative.
@@ -389,7 +475,8 @@
     // Facing a bet.
     const implied = draw && x.street < 3 ? 0.045 : 0;
     const stick = (bot.callDown - 0.5);
-    const needEq = potOdds + 0.01 + multi * 0.025 - stick * 0.11 - implied + (1 - bot.skill) * 0.02;
+    const needEq = potOdds + 0.01 + multi * 0.025 - stick * 0.11 - implied + (1 - bot.skill) * 0.02
+      - (aggroRead - 0.35) * 0.06 * (1 - tableFold);
     let strength = eq + noise;
     const allIn = toCall >= myChips * 0.72;
 
@@ -424,7 +511,10 @@
     return { type: 'fold' };
   }
 
-  const api = { ARCH, makeBot, makeRoster, newMood, read, decide, chatFor, genName };
+  const api = {
+    ARCH, makeBot, makeRoster, newMood, read, readLive, decide, chatFor, genName,
+    noteAction, noteShowdown, readsFor
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Bots = api;
 })(typeof self !== 'undefined' ? self : this);
