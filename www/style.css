@@ -381,6 +381,10 @@ input{font:inherit}
   transform:translateX(-50%) rotate(45deg);background:inherit;border-right:1px solid rgba(0,0,0,.1);
   border-bottom:1px solid rgba(0,0,0,.1)}
 .say.on{opacity:1;transform:translate(-50%,0)}
+.say.tell{background:linear-gradient(180deg,rgba(30,36,32,.97),rgba(12,17,14,.98));
+  color:#e9dcc0;border-color:rgba(226,189,119,.55);font-style:italic;font-size:10.5px;
+  box-shadow:0 10px 22px -10px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.07)}
+.say.tell:after{background:rgba(12,17,14,.98);border-color:rgba(226,189,119,.55)}
 .seat.hero .say{bottom:calc(100% + 22px)}
 
 #bets{position:absolute;inset:0;pointer-events:none;z-index:1}

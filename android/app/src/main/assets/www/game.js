@@ -528,7 +528,7 @@
       '<li><span><b>Call.</b> Match the current bet.</span></li>' +
       '<li><span><b>Raise.</b> Increase the bet. Everyone must match it or fold.</span></li>' +
       '<li><span><b>All-in.</b> Push every chip in front of you.</span></li></ol>' +
-      '<h3>Reading the table</h3><p>Each opponent has a personality. After a few hands their seat shows a read \u2014 tight or loose, passive or aggressive. Use it. They are reading you too.</p>' +
+      '<h3>Reading the table</h3><p>Each opponent has a personality. After a few hands their seat shows a read \u2014 tight or loose, passive or aggressive. Use it. They are reading you too. Watch their hands: a regular who counts his stack or stares you down usually has it, while fidgeting and fast shrugs often mean a bluff.</p>' +
       '<h3>Hand rankings</h3><p>Best at the top.</p><div class="group" id="rankList"></div>';
     const list = $('#rankList');
     RANKS.forEach((r, i) => {
@@ -737,6 +737,7 @@
       const say = $('.say', el);
       say.textContent = p.said || '';
       say.classList.toggle('on', !!p.said);
+      say.classList.toggle('tell', p.saidKind === 'tell');
       for (let k = 0; k < 2; k++) {
         const ce = holeEls[i][k];
         const up = p.human || p.reveal;
@@ -828,7 +829,19 @@
     if (!p.bot) return;
     if (Math.random() > 0.35) return;
     p.said = B.chatFor(p.bot, kind, Math.random);
-    setTimeout(() => { p.said = ''; render(); }, 2200);
+    p.saidKind = 'chat';
+    setTimeout(() => { p.said = ''; p.saidKind = ''; render(); }, 2200);
+    render();
+  }
+  // RDR2-style tell: a short physical habit shown before the action lands.
+  function botTell(p) {
+    if (!p.bot || !p.bot.tell) return;
+    p.said = p.bot.tell;
+    p.saidKind = 'tell';
+    p.bot.tell = '';
+    setTimeout(() => {
+      if (p.saidKind === 'tell') { p.said = ''; p.saidKind = ''; render(); }
+    }, 2600);
     render();
   }
 
@@ -1064,6 +1077,7 @@
           p.bot.postDecisions++;
           if (a.type === 'raise') p.bot.aggrCount++;
         }
+        botTell(p);
         if (a.type === 'fold' && Math.random() < 0.25) botSay(p, 'fold');
         else if (a.type === 'raise' && Math.random() < 0.3) botSay(p, 'raise');
         else if (a.type === 'call' && toCallNoRaise(p) && Math.random() < 0.2) botSay(p, 'call');

@@ -21,7 +21,24 @@
     'Costa', 'Warden', 'Iqbal', 'Larsen', 'Mbeki', 'Rossi', 'Vance', 'Sato', 'Delgado', 'Kaur',
     'Weiss', 'Frost', 'Molina', 'Nash', 'Petrov', 'Adeyemi', 'Blume', 'Calloway'];
   const NICK = ['Ice', 'The Wall', 'Doc', 'Cash', 'The Ghost', 'Tank', 'Slick', 'Hammer', 'Ace', 'The Kid',
-    'Vulture', 'Duke', 'Rocket', 'Lucky', 'The Professor', 'Bones', 'Maverick', 'Pirate', 'Sunshine', 'Mad Dog'];
+    'Vulture', 'Duke', 'Rocket', 'Lucky', 'The Professor', 'Bones', 'Maverick', 'Pirate', 'Sunshine', 'Mad Dog',
+    'Preacher', 'Dusty', 'Six-Gun', 'Whiskey', 'Parson', 'Deadeye', 'Buckshot', 'Sundance', 'Cotton', 'Reverend',
+    'Hatchet', 'Slim'];
+  FIRST.push('Hollis', 'Emmett', 'Wade', 'Cletus', 'Josiah', 'Mabel', 'Rufus', 'Silas', 'Tobias', 'Wyatt',
+    'Cordell', 'Ezra', 'Lyle', 'Otis', 'Vernon', 'Clay', 'Dewey', 'Hank', 'Ira', 'Jeb');
+  LAST.push('McCabe', 'Bramble', 'Cutter', 'Dunmore', 'Fisk', 'Gantry', 'Hobbs', 'Keller', 'Larkin', 'Mercer',
+    'Pike', 'Quill', 'Rourke', 'Stroud', 'Tully', 'Vickers', 'Whitlock', 'Baird', 'Cobb', 'Slade');
+
+  // A tell is a habit, not a random line: every regular has one per state and
+  // keeps it for the whole session, so the player can actually learn the table.
+  const TELLS = {
+    strong: ['counts his stack', 'sits up straight', 'stares you down', 'leans forward', 'tips his hat',
+      'goes very still'],
+    weak: ['checks his cards again', 'slumps in his chair', 'fidgets with a chip', 'will not meet your eye',
+      'sighs', 'shifts in his seat'],
+    bluff: ['talks a little too much', 'over-stacks his chips', 'taps the felt twice', 'grins at the felt',
+      'shrugs too quickly', 'reaches for his glass']
+  };
 
   function genName(r) {
     const f = pick(FIRST, r), l = pick(LAST, r);
@@ -150,6 +167,23 @@
         fold: ['Nope.', 'Okay.'],
         win: ['Ha!', 'Chaos wins.'], lose: ['Ha. Wow.']
       }
+    },
+    {
+      id: 'honest', label: 'Straight Shooter', w: 5, vpip: 0.24, pfr: 0.16, aggr: 0.42, bluff: 0.005,
+      callDown: 0.55, trap: 0.18, sizing: 0.95, overbet: 0.03,
+      chat: {
+        raise: ['I have it.', 'No bluff here.', 'You should fold.'], call: ['I call.', 'Show me.'],
+        fold: ['Not for me.', 'I fold.'], win: ['Straightforward.'], lose: ['Fair enough.']
+      }
+    },
+    {
+      id: 'bluffer', label: 'Bluffer', w: 4, vpip: 0.72, pfr: 0.44, aggr: 0.84, bluff: 0.44,
+      callDown: 0.62, trap: 0.04, sizing: 1.3, overbet: 0.3,
+      chat: {
+        raise: ['POT.', 'You cannot have it every time.', 'I am buying it.', 'Raise!'],
+        call: ['I call.', 'Why not.'], fold: ['Fine.', 'Take it.'], win: ['Told you.', 'Hah!'],
+        lose: ['Whatever.']
+      }
     }
   ];
 
@@ -191,6 +225,9 @@
       skill: clamp(0.42 + band * 0.58 + (r() - 0.5) * 0.1, 0.3, 1),
       noise: clamp(0.12 - band * 0.075 + (r() - 0.5) * 0.03, 0.02, 0.15),
       chat: a.chat,
+      tells: {
+        strong: pick(TELLS.strong, r), weak: pick(TELLS.weak, r), bluff: pick(TELLS.bluff, r)
+      },
       mood: null,
       seen: 0,
       hands: 0,
@@ -339,7 +376,7 @@
   //       street, late, nPlayers, heroProfile, rng}
   // Equity-driven decisions: ranges, pot odds, implied odds, fold equity,
   // board texture, multi-street plans and live exploits of the table.
-  function decide(bot, x) {
+  function decideAction(bot, x) {
     const R = x.rng || Math.random;
     const hole = x.hole || [];
     const board = x.board || [];
@@ -393,6 +430,7 @@
     if (!board.length) {
       bot.plan = null;
       const ps = Core.preflopStrength(hole);
+      bot._pre = true; bot._ps = ps; bot._made = -1;
       const pair = (hole[0] >> 2) === (hole[1] >> 2);
       const suited = (hole[0] & 3) === (hole[1] & 3);
       const gap = Math.abs((hole[0] >> 2) - (hole[1] >> 2));
@@ -465,6 +503,7 @@
       ? Core.equity(hole, board, 1, Math.max(120, Math.round(bot.sims * 0.7)), R)
       : eq;
     const callEq = clamp(eqHU + noise * 0.6, 0, 1);
+    bot._pre = false; bot._eq = callEq; bot._made = made;
     const monster = made >= 5 || (made >= 3 && callEq > 0.8) || callEq > 0.92;
     const strong = callEq > 0.68;
     const medium = callEq > 0.46;
@@ -564,8 +603,40 @@
     return { type: 'fold' };
   }
 
+  function tellState(bot, a) {
+    if (!bot || a.type === 'fold') return '';
+    if (bot._pre) {
+      const ps = bot._ps || 0;
+      if (a.type === 'raise' && ps < 0.58) return 'bluff';
+      if (ps > 0.8) return 'strong';
+      if (ps < 0.34) return 'weak';
+      return '';
+    }
+    const eq = bot._eq == null ? 0.4 : bot._eq;
+    const made = bot._made == null ? 0 : bot._made;
+    if (a.type === 'raise' && made <= 1 && eq < 0.56) return 'bluff';
+    if (made >= 3 || eq > 0.74) return 'strong';
+    if (eq < 0.36 && made <= 1) return 'weak';
+    return '';
+  }
+
+  // Sharper players hide it better, but every archetype leaks sometimes.
+  function tellFor(bot, a) {
+    const st = tellState(bot, a);
+    if (!st) return '';
+    const rate = clamp(0.5 - clamp(bot.skill, 0, 1) * 0.3, 0.14, 0.5);
+    if (Math.random() > rate) return '';
+    return (bot.tells && bot.tells[st]) || '';
+  }
+
+  function decide(bot, x) {
+    const a = decideAction(bot, x);
+    bot.tell = tellFor(bot, a);
+    return a;
+  }
+
   const api = {
-    ARCH, makeBot, makeRoster, newMood, read, readLive, decide, chatFor, genName,
+    ARCH, makeBot, makeRoster, newMood, read, readLive, decide, tellFor, chatFor, genName,
     noteAction, noteShowdown, readsFor
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
