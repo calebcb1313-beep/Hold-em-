@@ -10,3 +10,4 @@ holdem-royale.aab
 artifacts/
 android/local.properties
 gradle.log
+android/.gradle/
