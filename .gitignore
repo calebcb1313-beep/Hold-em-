@@ -11,3 +11,5 @@ artifacts/
 android/local.properties
 gradle.log
 android/.gradle/
+holdem-royale-*.apk
+holdem-royale-*.aab

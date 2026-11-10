@@ -3,11 +3,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch: {}
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      # Optional: set these repository secrets to also build a signed release.
+      # Optional: set these repository secrets to also build and release a signed APK.
       #   RELEASE_KEYSTORE_BASE64  (base64 -w0 of your .keystore)
       #   RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
       RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -20,6 +22,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Read app version
+        id: ver
+        run: echo "name=$(sed -n "s/.*versionName '\([^']*\)'.*/\1/p" android/app/build.gradle | head -1)" >> "$GITHUB_OUTPUT"
       - name: Show Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
@@ -57,3 +62,30 @@ jobs:
             android/app/build/outputs/apk/release/app-release.apk
             android/app/build/outputs/bundle/release/app-release.aab
           if-no-files-found: error
+
+      - name: Publish signed release
+        if: env.RELEASE_KEYSTORE_BASE64 != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: Hold'em Royale ${{ steps.ver.outputs.name }}
+          body: |
+            Signed release build of Hold'em Royale ${{ steps.ver.outputs.name }}.
+            Install `holdem-royale-${{ steps.ver.outputs.name }}.apk`, or upload the AAB to Play Console.
+          fail_on_unmatched_files: true
+          files: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+
+      # No signing secrets yet: still publish an installable preview build.
+      - name: Publish preview release
+        if: env.RELEASE_KEYSTORE_BASE64 == ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          name: Hold'em Royale ${{ steps.ver.outputs.name }}
+          body: |
+            Preview build of Hold'em Royale ${{ steps.ver.outputs.name }}, debug-signed by CI.
+            Add the release signing secrets to this repository and the next push will
+            publish a properly signed APK and AAB instead.
+          files: android/app/build/outputs/apk/debug/app-debug.apk
