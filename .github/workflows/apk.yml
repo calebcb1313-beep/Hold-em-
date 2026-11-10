@@ -61,6 +61,16 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
+      # A signed APK checked in under releases/ is attached to the release even
+      # when the signing secrets are not configured on the repository.
+      - name: Collect signed APK
+        run: |
+          VER="${{ steps.ver.outputs.name }}"
+          if [ -f "releases/holdem-royale-${VER}.apk" ]; then
+            echo "SIGNED_APK=releases/holdem-royale-${VER}.apk" >> "$GITHUB_ENV"
+            echo "Attaching signed APK: releases/holdem-royale-${VER}.apk"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: holdem-royale-apk
@@ -108,4 +118,7 @@ jobs:
           tag_name: v${{ steps.ver.outputs.name }}
           name: Hold'em Royale ${{ steps.ver.outputs.name }}
           body_path: release-notes.md
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: false
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            ${{ env.SIGNED_APK }}
