@@ -1,14 +1,54 @@
 name: Build APK
-on: { push: { branches: [main] }, workflow_dispatch: {} }
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: unzip -q holdem-poker.zip
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: 17 }
+        with:
+          distribution: temurin
+          java-version: '17'
       - uses: android-actions/setup-android@v3
-      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - name: Sync web assets into the app
+        run: bash tools/sync-web.sh
+      - name: Build debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
-        with: { name: holdem-apk, path: android/app/build/outputs/apk/debug/app-debug.apk }
+        with:
+          name: holdem-royale-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # Release signing is optional. Add these repository secrets to enable it:
+      #   RELEASE_KEYSTORE_BASE64  (base64 -w0 of your .keystore)
+      #   RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+      - name: Restore release keystore
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          {
+            echo "storeFile=$RUNNER_TEMP/release.keystore"
+            echo "storePassword=${{ secrets.RELEASE_STORE_PASSWORD }}"
+            echo "keyAlias=${{ secrets.RELEASE_KEY_ALIAS }}"
+            echo "keyPassword=${{ secrets.RELEASE_KEY_PASSWORD }}"
+          } > android/keystore.properties
+      - name: Build release APK and AAB
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        run: |
+          cd android
+          ./gradlew --no-daemon assembleRelease bundleRelease
+      - uses: actions/upload-artifact@v4
+        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+        with:
+          name: holdem-royale-release
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error

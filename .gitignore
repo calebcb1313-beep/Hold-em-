@@ -1,0 +1,12 @@
+build/
+server.log
+tools-setup.log
+tools/*.keystore
+android/keystore.properties
+holdem-royale.apk
+holdem-royale-release.apk
+holdem-royale.aab
+*.idsig
+artifacts/
+android/local.properties
+gradle.log

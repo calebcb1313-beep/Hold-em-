@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hold'em Royale">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0" stop-color="#1e6a4f"/>
+      <stop offset="0.55" stop-color="#0e4030"/>
+      <stop offset="1" stop-color="#05211a"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff5da"/>
+      <stop offset="1" stop-color="#c08f46"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#fffdf7"/>
+      <stop offset="1" stop-color="#e8dfcb"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="27" y="27" width="458" height="458" rx="94" fill="none" stroke="url(#gold)" stroke-opacity="0.5" stroke-width="5"/>
+  <g transform="rotate(-13 200 300)">
+    <rect x="104" y="122" width="176" height="244" rx="20" fill="url(#cream)"/>
+    <text x="122" y="196" font-family="Georgia,serif" font-weight="700" font-size="66" fill="#1a1f1b">A</text>
+    <text x="196" y="342" font-family="Georgia,serif" font-size="96" fill="#1a1f1b">&#9824;</text>
+  </g>
+  <g transform="rotate(13 330 300)">
+    <rect x="236" y="150" width="176" height="244" rx="20" fill="url(#cream)"/>
+    <text x="254" y="224" font-family="Georgia,serif" font-weight="700" font-size="66" fill="#b0332a">A</text>
+    <text x="328" y="370" font-family="Georgia,serif" font-size="96" fill="#b0332a">&#9829;</text>
+  </g>
+  <circle cx="256" cy="452" r="26" fill="#0a241b" stroke="url(#gold)" stroke-opacity="0.6" stroke-width="3"/>
+  <text x="256" y="463" font-family="Georgia,serif" font-size="32" fill="url(#gold)" text-anchor="middle">&#9824;</text>
+</svg>
