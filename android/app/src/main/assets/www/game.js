@@ -29,47 +29,104 @@
   const saveCareer = () => store.set('career', career);
 
   /* ================= sound ================= */
-  let ac = null;
+  let ac = null, master = null, comp = null, voices = 0;
+
   function audio() {
     if (!S.sound) return null;
     try {
-      ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+      if (!ac) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ac = new AC();
+        comp = ac.createDynamicsCompressor();
+        comp.threshold.value = -16;
+        comp.knee.value = 22;
+        comp.ratio.value = 5;
+        comp.attack.value = 0.003;
+        comp.release.value = 0.22;
+        master = ac.createGain();
+        master.gain.value = 0.85;
+        master.connect(comp);
+        comp.connect(ac.destination);
+      }
       if (ac.state === 'suspended') ac.resume();
     } catch (e) { return null; }
     return ac;
   }
-  function tone(freq, dur, type, vol, delay) {
-    const a = audio(); if (!a) return;
+  function spend(ms) {
+    voices++;
+    setTimeout(() => { voices = Math.max(0, voices - 1); }, ms);
+  }
+  // A voice with an exponential envelope, optional pitch glide.
+  function tone(freq, dur, type, vol, delay, glide) {
+    const a = audio(); if (!a || voices > 26) return;
     const t = a.currentTime + (delay || 0);
     const o = a.createOscillator(), g = a.createGain();
     o.type = type || 'sine';
-    o.frequency.setValueAtTime(freq, t);
+    o.frequency.setValueAtTime(Math.max(24, freq), t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(Math.max(24, glide), t + dur);
+    const peak = Math.max(0.0004, vol == null ? 0.05 : vol);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol || 0.06, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.02, dur * 0.3));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.03);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.04);
+    spend((dur + (delay || 0)) * 1000 + 80);
   }
-  function noise(dur, freq, vol, type) {
-    const a = audio(); if (!a) return;
+  // Filtered noise: card slides, folds, chip clatter.
+  function noise(dur, freq, vol, type, q, delay, sweepTo) {
+    const a = audio(); if (!a || voices > 26) return;
     const n = Math.max(1, Math.floor(a.sampleRate * dur));
     const buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 1.7);
     const src = a.createBufferSource(), f = a.createBiquadFilter(), g = a.createGain();
-    src.buffer = buf; f.type = type || 'bandpass'; f.frequency.value = freq; f.Q.value = 0.9; g.gain.value = vol;
-    src.connect(f); f.connect(g); g.connect(a.destination); src.start();
+    const t = a.currentTime + (delay || 0);
+    src.buffer = buf;
+    f.type = type || 'bandpass';
+    f.frequency.setValueAtTime(Math.max(60, freq), t);
+    f.Q.value = q == null ? 1 : q;
+    if (sweepTo) f.frequency.exponentialRampToValueAtTime(Math.max(60, sweepTo), t + dur);
+    g.gain.setValueAtTime(Math.max(0.0002, vol), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f); f.connect(g); g.connect(master);
+    src.start(t);
+    spend((dur + (delay || 0)) * 1000 + 60);
   }
-  const sfx = {
-    deal: () => noise(0.07, 2400, 0.35),
-    chip: () => { tone(1650, 0.05, 'triangle', 0.05); tone(2250, 0.05, 'triangle', 0.035, 0.045); },
-    check: () => tone(170, 0.07, 'sine', 0.1),
-    fold: () => noise(0.12, 800, 0.28),
-    turn: () => { tone(620, 0.1, 'sine', 0.06); tone(930, 0.14, 'sine', 0.05, 0.09); },
-    raise: () => { tone(340, 0.08, 'sawtooth', 0.04); tone(680, 0.1, 'triangle', 0.05, 0.05); },
-    win: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.26, 'triangle', 0.06, i * 0.085)),
-    lose: () => { tone(300, 0.28, 'sine', 0.05); tone(220, 0.4, 'sine', 0.05, 0.16); },
-    level: () => [523, 784, 1047, 1568].forEach((f, i) => tone(f, 0.3, 'sine', 0.055, i * 0.11)),
-    allin: () => { [440, 554, 659, 880].forEach((f, i) => tone(f, 0.5, 'triangle', 0.05, i * 0.05)); }
+  const chipHits = (count, vol, spread) => {
+    for (let i = 0; i < count; i++) {
+      const f = 1450 + Math.random() * 1900;
+      tone(f, 0.045 + Math.random() * 0.03, 'triangle',
+        vol * (0.55 + Math.random() * 0.7), i * spread + Math.random() * 0.012);
+    }
+    noise(0.05, 3400, vol * 0.5, 'highpass', 0.8, 0);
   };
+  const sfx = {
+    tap: () => tone(760, 0.035, 'sine', 0.018),
+    deal: () => { noise(0.055, 3800, 0.12, 'bandpass', 1.6, 0, 1400); noise(0.028, 1100, 0.05, 'highpass', 0.9, 0.02); },
+    flip: () => noise(0.05, 2600, 0.08, 'bandpass', 1.2, 0, 900),
+    chip: () => chipHits(2, 0.055, 0.03),
+    chips: () => chipHits(5, 0.05, 0.025),
+    check: () => { tone(128, 0.085, 'sine', 0.16); noise(0.035, 620, 0.07, 'lowpass', 0.7, 0); },
+    fold: () => noise(0.18, 1200, 0.1, 'lowpass', 0.6, 0, 260),
+    turn: () => { tone(700, 0.09, 'sine', 0.045); tone(1050, 0.16, 'sine', 0.035, 0.08); },
+    raise: () => { chipHits(3, 0.05, 0.03); tone(260, 0.16, 'sawtooth', 0.022, 0, 420); },
+    allin: () => {
+      tone(240, 0.5, 'sawtooth', 0.03, 0, 1250);
+      chipHits(6, 0.05, 0.02);
+      tone(88, 0.35, 'sine', 0.11, 0.42);
+    },
+    pot: () => { for (let i = 0; i < 7; i++) tone(1300 + Math.random() * 1400, 0.06, 'triangle', 0.032, i * 0.035); },
+    win: () => {
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.42, 'triangle', 0.05, i * 0.09));
+      tone(1568, 0.7, 'sine', 0.024, 0.36);
+    },
+    lose: () => { tone(330, 0.3, 'sine', 0.045); tone(247, 0.45, 'sine', 0.045, 0.14); },
+    level: () => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'triangle', 0.05, i * 0.08)); },
+    blind: () => { tone(880, 0.1, 'square', 0.028); tone(1174, 0.16, 'square', 0.026, 0.12); },
+    trophy: () => { [523, 659, 784, 1047, 1319, 1568, 2093].forEach((f, i) => tone(f, 0.5, 'triangle', 0.048, i * 0.1)); },
+    bust: () => { tone(196, 0.4, 'sine', 0.06); tone(147, 0.6, 'sine', 0.055, 0.2); noise(0.4, 400, 0.05, 'lowpass', 0.6, 0); }
+  };
+
   const buzz = (ms) => { if (S.vibe && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } };
 
   /* ================= screens ================= */
@@ -529,8 +586,8 @@
     const set = (window.innerWidth < 560 ? LAYOUT_NARROW : LAYOUT_WIDE)[n] || LAYOUT_WIDE[4];
     return set;
   };
-  let seatEls = [], holeEls = [], boardEls = [];
-  let bannerT = 0;
+  let seatEls = [], holeEls = [], boardEls = [], betsEls = [], seatXY = [];
+  let bannerT = 0, lastPot = 0;
 
   const delay = () => ({ slow: 1400, normal: 780, fast: 260 }[S.speed] || 780);
   const sleep = (ms) => new Promise((res, rej) => {
@@ -609,6 +666,15 @@
     seats.innerHTML = ''; board.innerHTML = '';
     seatEls = []; holeEls = []; boardEls = [];
     const pos = layoutFor(G.players.length);
+    seatXY = pos;
+    const betsWrap = $('#bets');
+    betsWrap.innerHTML = '';
+    betsEls = G.players.map(() => {
+      const d = document.createElement('div');
+      d.className = 'bet';
+      betsWrap.appendChild(d);
+      return d;
+    });
     G.players.forEach((p, i) => {
       const [x, y] = pos[i];
       const el = document.createElement('div');
@@ -687,8 +753,44 @@
       ce.classList.toggle('hl', !!(G.hl && has && G.hl.has(G.board[k])));
     }
     const pot = potTotal();
-    $('#pot').innerHTML = pot ? '<span>POT</span><b>' + fmt(pot) + '</b>' : '';
+    const potEl = $('#pot');
+    potEl.innerHTML = pot ? '<span>POT</span><b>' + fmt(pot) + '</b>' : '';
+    if (pot > lastPot) {
+      potEl.classList.remove('bump');
+      void potEl.offsetWidth;
+      potEl.classList.add('bump');
+    }
+    lastPot = pot;
+    renderBets();
     updateGoal();
+  }
+
+  // Chips sit on the felt in front of each player, sliding in as they bet.
+  function renderBets() {
+    const wrap = $('#bets');
+    if (!wrap) return;
+    if (betsEls.length !== G.players.length) {
+      wrap.innerHTML = '';
+      betsEls = G.players.map(() => {
+        const d = document.createElement('div');
+        d.className = 'bet';
+        wrap.appendChild(d);
+        return d;
+      });
+    }
+    G.players.forEach((p, i) => {
+      const el = betsEls[i];
+      if (!el) return;
+      const xy = seatXY[i] || [50, 50];
+      const bx = xy[0] + (50 - xy[0]) * 0.3;
+      const by = xy[1] + (44 - xy[1]) * 0.34;
+      el.style.left = bx.toFixed(2) + '%';
+      el.style.top = by.toFixed(2) + '%';
+      const show = p.bet > 0 && !p.out && !G.over;
+      el.classList.toggle('on', show);
+      el.classList.toggle('allin', !!p.allin);
+      if (show) el.textContent = fmt(p.bet);
+    });
   }
 
   function updateGoal() {
@@ -793,7 +895,7 @@
       setMode('turn');
       updateHint();
       sfx.turn(); buzz(25);
-      status(toCall === 0 ? 'Your move \u2014 check or bet.' : 'Your move \u2014 ' + fmt(toCall) + ' to call.');
+      status('');
     });
   }
 
@@ -1001,6 +1103,7 @@
         G.bb = Math.max(G.bb + 1, Math.round((G.bb * 1.5) / 10) * 10);
         G.sb = Math.floor(G.bb / 2);
         toast('Level ' + G.tLevel + ' - blinds ' + fmt(G.sb) + ' / ' + fmt(G.bb));
+        sfx.blind();
       }
       const aliveNow = P.filter((p) => p.chips > 0).length;
       if (!G.finalShown && aliveNow <= 3) {
@@ -1009,6 +1112,9 @@
       }
     }
     G.over = false; G.board = []; G.hl = null; G.minRaise = G.bb; G.cur = 0; G.acting = -1;
+    const potEl = $('#pot');
+    if (potEl) potEl.classList.remove('collect', 'bump');
+    lastPot = 0;
     G.dealer = next(G.dealer < 0 ? P.length - 1 : G.dealer, (p) => !p.out);
     G.hp.hands++;
     const inPlay = P.filter((p) => !p.out);
@@ -1105,6 +1211,8 @@
     G.over = true;
     if (sd) P.forEach((p) => { if (alive(p)) p.reveal = true; });
     const { won, bestWinners } = resolvePot(sd);
+    sfx.pot();
+    $('#pot').classList.add('collect');
     if (sd) noteShowdowns();
     won.forEach((amt, p) => { p.chips += amt; p.win = true; });
     P.forEach((p) => { p.allin = false; });
@@ -1262,7 +1370,7 @@
     G.running = false;
     store.del('session');
     saveCareer();
-    sfx.lose();
+    sfx.bust();
     const canRetry = G.mode === 'career' && career.bankroll >= G.buyin;
     modal(
       '<div class="sheet-tag danger">Busted</div><h2>Out of chips</h2>' +
@@ -1294,7 +1402,7 @@
     career.bankroll += G.prize;
     addXp(500);
     saveCareer();
-    sfx.level();
+    sfx.trophy();
     modal(
       '<div class="sheet-tag">Tournament won</div>' +
       '<h2>' + m.name + '</h2>' +
@@ -1315,7 +1423,7 @@
     G.running = false;
     store.del('session');
     saveCareer();
-    sfx.lose();
+    sfx.bust();
     const canRetry = career.bankroll >= G.buyin;
     modal(
       '<div class="sheet-tag danger">Knocked out</div>' +
@@ -1418,6 +1526,10 @@
     if (e.key === 'Escape') window.__back();
   });
   document.addEventListener('pointerdown', () => { if (S.sound) audio(); }, { once: true });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    if (b && !b.disabled) sfx.tap();
+  }, true);
 
   /* ================= boot ================= */
   applyTheme();

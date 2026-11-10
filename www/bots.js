@@ -337,6 +337,8 @@
   /* ---------------- decision ---------------- */
   // ctx: {hole, board, pot, toCall, cur, minRaise, myBet, myChips, nOpp, bb, sb,
   //       street, late, nPlayers, heroProfile, rng}
+  // Equity-driven decisions: ranges, pot odds, implied odds, fold equity,
+  // board texture, multi-street plans and live exploits of the table.
   function decide(bot, x) {
     const R = x.rng || Math.random;
     const hole = x.hole || [];
@@ -345,8 +347,8 @@
     if (hole.length < 2) return { type: 'call' };
     const pot = Math.max(bb, x.pot || 0);
     const cur = x.cur || 0;
-    const toCall = Math.max(0, (x.toCall == null ? cur - (x.myBet || 0) : x.toCall));
     const myBet = x.myBet || 0;
+    const toCall = Math.max(0, x.toCall == null ? cur - myBet : x.toCall);
     const myChips = Math.max(0, x.myChips || 0);
     const maxTo = myChips + myBet;
     const minTo = Math.min(maxTo, cur + Math.max(bb, x.minRaise || bb));
@@ -357,157 +359,192 @@
     const maniac = clamp(hero.maniac || 0, 0, 1);
     const stationHero = clamp(hero.callHappy || 0, 0, 1);
     const reads = x.reads || {};
-    const tableFold = reads.confident ? clamp(reads.foldToBet, 0, 1) : 0.35;
+    const tableFold = reads.confident ? clamp(reads.foldToBet, 0.05, 0.85) : 0.34;
     const tableCall = reads.confident ? clamp(reads.callRate, 0, 1) : 0.45;
     const aggroRead = clamp(reads.aggAggr == null ? 0.35 : reads.aggAggr, 0, 1);
 
-    const m = bot.mood || (bot.mood = newMood(bot, R));
-    const aggr = bot.aggr * m.aggr;
-    const loose = m.loose;
+    const mood = bot.mood || (bot.mood = newMood(bot, R));
+    const aggr = clamp(bot.aggr * mood.aggr, 0.05, 1.3);
+    const loose = mood.loose;
+    const skill = clamp(bot.skill, 0.3, 1);
+    const stick = bot.callDown - 0.5;
 
     const raiseTo = (to) => {
       if (!canRaise) return { type: 'call' };
-      let t = Math.round(to / Math.max(1, sb)) * Math.max(1, sb);
+      const unit = Math.max(1, sb);
+      let t = Math.round(to / unit) * unit;
       t = clamp(t, minTo, maxTo);
       if (t <= cur) return { type: 'call' };
       return { type: 'raise', to: t };
     };
     const potAfter = pot + toCall;
     const sizeTo = (frac) => {
-      // frac of the pot after calling, in addition to the current bet
       const base = Math.max(bb, potAfter * frac * bot.sizing);
       return raiseTo(cur + base);
     };
+    const roundBB = (v) => Math.max(minTo, Math.round(v / Math.max(1, sb)) * Math.max(1, sb));
 
     const eq = Core.equity(hole, board, nOpp, bot.sims, R);
-    const noise = (R() - 0.5) * bot.noise * 2;
+    const noise = (R() - 0.5) * bot.noise * 0.9;
+    const eqN = clamp(eq + noise, 0, 1);
+    const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
 
-    /* ---- preflop ---- */
-    if (board.length === 0) {
+    /* ---------------- pre-flop ---------------- */
+    if (!board.length) {
+      bot.plan = null;
       const ps = Core.preflopStrength(hole);
       const pair = (hole[0] >> 2) === (hole[1] >> 2);
       const suited = (hole[0] & 3) === (hole[1] & 3);
-      // vpip is the fraction of hands this player likes, so the bar sits at that percentile.
-      const playThresh = clamp(0.425 - bot.vpip * 0.4, 0.10, 0.46)
-        - (loose - 1) * 0.12 - (bot.callDown - 0.5) * 0.04;
-      const openSize = Math.max(bb * 2, Math.round((bb * (2.3 + R() * 1.1)) / Math.max(1, sb)) * Math.max(1, sb));
+      const gap = Math.abs((hole[0] >> 2) - (hole[1] >> 2));
+      const conn = !pair && gap <= 2;
+      const pos = x.late ? 1 : 0;
+      const stackBB = myChips / bb;
       const facingRaise = cur > bb;
 
-      // Short stack: push or fold.
-      if (myChips <= bb * 9) {
-        const pushThresh = 0.5 - bot.vpip * 0.12 + multi * 0.05;
-        if (ps > pushThresh && canRaise) return raiseTo(maxTo);
-        if (toCall > 0 && ps > pushThresh - 0.06) return { type: 'call' };
-        if (toCall === 0) return { type: 'call' };
-        return { type: 'fold' };
+      // Short stack: shove or fold, judged on equity against the price.
+      if (stackBB <= 12) {
+        const need = toCall > 0 ? toCall / (pot + toCall) : 0;
+        const callNeed = need + 0.03 - maniac * 0.06 - stick * 0.03 - (1 - skill) * 0.02;
+        if (canRaise && (ps > 0.54 - bot.vpip * 0.1 || (pos && ps > 0.46 && R() < 0.5))) {
+          return raiseTo(maxTo);
+        }
+        if (toCall > 0) return eqN > callNeed ? { type: 'call' } : { type: 'fold' };
+        return { type: 'call' };
       }
 
       if (!facingRaise) {
-        const premium = ps > 0.86 - maniac * 0.03;
-        if (premium && canRaise && R() < 0.9) return raiseTo(Math.max(minTo, openSize * (1 + R() * 0.5)));
-        if (ps + (R() - 0.5) * bot.noise > playThresh) {
-          const raiseP = clamp((bot.pfr / Math.max(0.08, bot.vpip)) * (0.6 + aggr * 0.55), 0, 0.95);
-          if (canRaise && R() < raiseP) return raiseTo(openSize);
-          if (toCall === 0) return { type: 'call' };
-          if (toCall <= bb * 1.3 || bot.callDown > 0.7 || R() < 0.4) return { type: 'call' };
+        const openBar = clamp(0.46 - bot.vpip * 0.44 - pos * 0.045 - (loose - 1) * 0.09
+          - (bot.callDown - 0.5) * 0.02 - (pair ? 0.06 : 0) - (suited ? 0.02 : 0), 0.08, 0.5);
+        if (ps > 0.9 && canRaise && R() < 0.9) return raiseTo(roundBB(bb * (3 + R() * 1.2)));
+        if (ps > openBar) {
+          const pfr = clamp(bot.pfr / Math.max(0.06, bot.vpip), 0.05, 0.95);
+          if (canRaise && R() < clamp(pfr * (0.75 + aggr * 0.5) + (pos ? 0.05 : 0), 0, 0.96)) {
+            return raiseTo(roundBB(bb * (2.2 + R() * 1.2)));
+          }
+          if (toCall <= bb) return { type: 'call' };
           return { type: 'fold' };
         }
-        if (toCall === 0) {
-          // Big blind stab at a limped pot.
-          if (canRaise && R() < aggr * 0.22) return raiseTo(openSize);
-          return { type: 'call' };
+        // Late-position steal against a table that folds too much.
+        if (pos && canRaise && toCall <= sb * 2 && R() < clamp(bot.bluff * 2.2 * (0.6 + tableFold), 0, 0.42)) {
+          return raiseTo(roundBB(bb * (2.4 + R() * 0.8)));
         }
-        if (canRaise && x.late && R() < bot.bluff * 1.7 * aggr * (1 + tableFold)) return raiseTo(openSize);
-        return { type: 'fold' };
+        return { type: 'call' };
       }
 
-      // Facing a raise.
-      // Facing a shove is its own decision: price, read and nerve.
-      if (toCall >= myChips * 0.8) {
-        // The bar drops for sticky players and for known maniacs whose range is any two.
-        const shoveCall = clamp(0.32 + (1 - maniac) * 0.1 - maniac * 0.08
-          - (bot.callDown - 0.5) * 0.16 - (loose - 1) * 0.12 + multi * 0.03, 0.18, 0.6);
-        if (ps > shoveCall) return { type: 'call' };
-        if (pair && ps > shoveCall - 0.13 && R() < 0.45) return { type: 'call' };
-        if (maniac > 0.35 && suited && ps > shoveCall - 0.08 && R() < 0.35) return { type: 'call' };
+      // Facing an open: 3-bet the top of the range, defend by price.
+      if (toCall >= myChips * 0.55) {
+        const need = toCall / (pot + toCall);
+        const exploit = maniac * 0.1 + aggroRead * 0.05 + stick * 0.04 + (loose - 1) * 0.05;
+        if (eqN > need + 0.02 - exploit) return { type: 'call' };
+        if (pair && ps > 0.55 && R() < 0.4) return { type: 'call' };
+        if (suited && conn && ps > 0.4 && R() < 0.22) return { type: 'call' };
         return { type: 'fold' };
       }
-      const vsRaise = clamp(0.78 - (loose - 1) * 0.2 - (bot.callDown - 0.5) * 0.1
-        + multi * 0.07 - maniac * 0.15 - (aggroRead - 0.35) * 0.12, 0.42, 0.9);
-      if (ps > 0.92 && canRaise && R() < 0.8) return raiseTo(Math.min(maxTo, Math.max(minTo, cur * 3)));
-      if (ps > 0.74 && canRaise && R() < aggr * 0.5) return raiseTo(Math.max(minTo, cur * 2.6));
-      if (ps > vsRaise) return { type: 'call' };
-      if (toCall <= bb * 2.2 && ps > vsRaise - 0.09 && R() < bot.callDown * 0.8) return { type: 'call' };
-      // Defend the big blind cheaply with playable hands.
-      if (toCall <= bb * 1.5 && pair && ps > 0.28 && R() < 0.45 + bot.callDown * 0.3) return { type: 'call' };
+      const defend = clamp(0.82 - pos * 0.06 - (loose - 1) * 0.14 - stick * 0.06
+        - maniac * 0.1 - (aggroRead - 0.35) * 0.08, 0.5, 0.95);
+      if (ps > 0.93 && canRaise && R() < 0.78) return raiseTo(roundBB(Math.max(cur * 3, bb * 9)));
+      if (ps > 0.78 && canRaise && R() < aggr * 0.55) return raiseTo(roundBB(cur * 2.8));
+      if (ps > defend) return { type: 'call' };
+      if (toCall <= bb * 2.5 && (pair || (suited && conn)) && ps > 0.34 && R() < 0.5 + stick * 0.3) {
+        return { type: 'call' };
+      }
       return { type: 'fold' };
     }
 
-    /* ---- post-flop ---- */
+    /* ---------------- post-flop ---------------- */
     const tex = Core.texture(board, hole);
     const made = Core.category(Core.evaluate(hole.concat(board)));
-    const draw = tex.flushDraw || tex.straightOuts >= 2;
-    const potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
-    const monster = made >= 5 || (made >= 3 && eq > 0.78) || eq > 0.9 || (made === 2 && eq > 0.8);
-    const strong = eq > 0.7 + multi * 0.05;
-    const decent = eq > 0.47;
-    const boardScary = tex.wet || tex.paired || tex.broadway >= 3;
+    const flushDraw = !!tex.flushDraw;
+    const straightDraw = (tex.straightOuts || 0) >= 2;
+    const draw = flushDraw || straightDraw;
+    const monster = made >= 5 || (made >= 3 && eqN > 0.8) || eqN > 0.92;
+    const strong = eqN > 0.68 + multi * 0.06;
+    const medium = eqN > 0.46;
+    const air = made <= 0 || (made === 1 && eqN < 0.34);
+    const boardScary = !!tex.wet || !!tex.paired || (tex.broadway || 0) >= 3;
+    const street = x.street || 1;
+    const foldEq = clamp(0.28 + tableFold * 0.5 + (boardScary ? 0.08 : 0)
+      - multi * 0.12 - stationHero * 0.18 - tableCall * 0.15, 0.05, 0.85);
+    const plan = bot.plan && bot.plan.street === street - 1 ? bot.plan : null;
+    const barrel = plan && plan.kind === 'bluff'
+      ? clamp(0.38 + aggr * 0.35 + foldEq * 0.3, 0, 0.85) : 0;
 
-    const bluffFreq = clamp(bot.bluff * (0.55 + aggr * 0.85) * (hero.foldsALot ? 1.55 : 1)
-      * (multi > 0.5 ? 0.7 : 1) * (stationHero > 0.5 ? 0.45 : 1)
-      * (0.55 + tableFold * 1.35) * (1 - tableCall * 0.3), 0.005, 0.5);
-    const trap = clamp(bot.trap * (monster ? 1 : 0.2), 0, 0.85);
-
-    // Nobody has bet: check or take the initiative.
     if (toCall <= 0) {
       if (!canRaise) return { type: 'call' };
       if (monster) {
-        if (R() < trap * 0.9) return { type: 'call' };            // slow-play
-        return sizeTo(0.6 + R() * 0.5);
+        bot.plan = { kind: 'value', street };
+        if (R() < bot.trap * 0.55) return { type: 'call' };
+        return sizeTo(boardScary ? 0.85 : 0.6 + R() * 0.25);
       }
-      if (strong && R() < 0.6 + aggr * 0.3) return sizeTo(0.5 + R() * 0.42);
-      if (decent && R() < aggr * 0.34) return sizeTo(0.38 + R() * 0.2);
-      if (draw && R() < 0.34 + aggr * 0.34) return sizeTo(0.55 + R() * 0.25);
-      if (R() < bluffFreq) return sizeTo(R() < bot.overbet ? 1.35 : 0.72);
+      if (strong) {
+        bot.plan = { kind: 'value', street };
+        const freq = 0.72 + aggr * 0.2;
+        if (R() < freq) return sizeTo(boardScary ? 0.7 : 0.55);
+        return { type: 'call' };
+      }
+      if (medium) {
+        if (R() < 0.3 + aggr * 0.26) {
+          bot.plan = { kind: 'value', street };
+          return sizeTo(0.45);
+        }
+        return { type: 'call' };
+      }
+      if (draw) {
+        if (R() < 0.5 + aggr * 0.32) {
+          bot.plan = { kind: 'semi', street };
+          return sizeTo(0.6);
+        }
+        return { type: 'call' };
+      }
+      const bluff = clamp(bot.bluff * (0.8 + aggr * 0.9) * (1 + foldEq)
+        * (1 - stationHero * 0.6) * (street === 3 ? 0.8 : 1)
+        * (boardScary ? 1.1 : 0.9), 0.01, 0.55);
+      if (R() < bluff || (barrel && R() < barrel)) {
+        bot.plan = { kind: 'bluff', street };
+        return sizeTo(R() < bot.overbet ? 1.3 : 0.7);
+      }
+      bot.plan = null;
       return { type: 'call' };
     }
 
-    // Facing a bet.
-    const implied = draw && x.street < 3 ? 0.045 : 0;
-    const stick = (bot.callDown - 0.5);
-    const needEq = potOdds + 0.01 + multi * 0.025 - stick * 0.11 - implied + (1 - bot.skill) * 0.02
-      - (aggroRead - 0.35) * 0.06 * (1 - tableFold);
-    let strength = eq + noise;
-    const allIn = toCall >= myChips * 0.72;
+    const implied = draw && street < 3 ? 0.05 : 0;
+    const bluffCatch = aggroRead > 0.5 ? 0.03 : 0;
+    const need = potOdds + 0.02 + multi * 0.02 - stick * 0.08 - implied
+      - maniac * 0.04 - bluffCatch + (1 - skill) * 0.02;
 
-    if (allIn) {
-      const maniacBonus = maniac * 0.14;
-      const shoveNeed = needEq + 0.02 - maniacBonus - stick * 0.05;
-      if (monster) {
-        if (canRaise && R() < 0.35) return raiseTo(maxTo);
-        return { type: 'call' };
-      }
-      if (strength > shoveNeed + 0.03) return { type: 'call' };
-      // Sticky players and made hands find hero calls.
-      if (made >= 2 && R() < bot.callDown * 0.45) return { type: 'call' };
-      if (made === 1 && R() < bot.callDown * 0.18 && toCall < pot * 0.6) return { type: 'call' };
-      if (maniac > 0.35 && made >= 1 && R() < 0.4) return { type: 'call' };
+    if (toCall >= myChips * 0.75) {
+      const shoveNeed = need - stick * 0.03 - maniac * 0.05;
+      if (monster || eqN > shoveNeed + 0.04) return { type: 'call' };
+      if (draw && street < 3 && eqN > shoveNeed - 0.02) return { type: 'call' };
+      if (made >= 2 && R() < bot.callDown * 0.4) return { type: 'call' };
       return { type: 'fold' };
     }
 
     if (monster) {
-      if (canRaise && R() > trap * 0.5) return sizeTo(0.7 + R() * 0.6);
+      bot.plan = { kind: 'value', street };
+      if (canRaise && R() < 0.22 + bot.trap * 0.35) return sizeTo(1.0);
       return { type: 'call' };
     }
-    if (strength > needEq) {
-      if (canRaise && (strong || made >= 2) && R() < aggr * 0.55) return sizeTo(0.58 + R() * 0.4);
+    if (strong) {
+      bot.plan = { kind: 'value', street };
+      if (canRaise && R() < aggr * 0.5) return sizeTo(0.9);
       return { type: 'call' };
     }
-    // Semi-bluff with draws, occasional bluff raise.
-    if (canRaise && draw && R() < bluffFreq * 1.1 && toCall < pot * 0.55) return sizeTo(0.85);
-    if (canRaise && R() < bluffFreq * 0.45) return sizeTo(boardScary ? 1.0 : 0.8);
-    // Cheap calls keep the game alive and are realistic with any equity.
-    if (toCall <= Math.max(bb, pot * 0.1) && (decent || made >= 1) && R() < 0.35 + bot.callDown * 0.4) return { type: 'call' };
+    if (eqN > need + 0.06) {
+      if (canRaise && medium && R() < aggr * 0.18) return sizeTo(0.85);
+      return { type: 'call' };
+    }
+    if (draw && toCall < pot * 0.4 && eqN > need - 0.02) {
+      if (canRaise && R() < 0.16 + aggr * 0.16) return sizeTo(1.0);
+      return { type: 'call' };
+    }
+    if (canRaise && air && R() < bot.bluff * 0.5 * (0.5 + foldEq) && toCall < pot * 0.5) {
+      return sizeTo(boardScary ? 1.05 : 0.8);
+    }
+    if (toCall <= Math.max(bb, pot * 0.09) && eqN > need - 0.03 && R() < 0.3 + bot.callDown * 0.35) {
+      return { type: 'call' };
+    }
+    bot.plan = null;
     return { type: 'fold' };
   }
 
