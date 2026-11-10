@@ -1,5 +1,5 @@
 const V = 'holdem-royale-v3';
-const F = ['./', 'index.html', 'style.css', 'poker-core.js', 'bots.js', 'game.js',
+const F = ['./', 'index.html', 'style.css', 'skin.css', 'DisplaySerif.ttf', 'poker-core.js', 'bots.js', 'game.js',
   'icon.svg', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => e.waitUntil(

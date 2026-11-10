@@ -244,7 +244,7 @@
     if (sess) $('#mContinue').textContent = 'Continue \u00B7 ' + fmt(sess.chips) + ' chips';
     const cleared = career.cleared;
     $('#mProgress').textContent = cleared + ' / ' + MAPS.length + ' tables cleared' +
-      (trophyCount() ? ' - ' + trophyCount() + ' trophies' : '');
+      (trophyCount() ? ' - ' + trophyCount() + (trophyCount() === 1 ? ' trophy' : ' trophies') : '');
     const statsEl = $('#mStats');
     statsEl.innerHTML = '';
     [[career.hands, 'hands'], [career.won, 'pots won'], [fmtK(career.bestPot), 'best pot']].forEach(([v, k]) => {

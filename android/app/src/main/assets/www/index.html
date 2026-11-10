@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#070b0a">
+<meta name="theme-color" content="#1a110a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,6 +13,7 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="skin.css">
 </head>
 <body>
 <main id="app">
@@ -25,6 +26,9 @@
       <span class="float f2">&#9829;</span>
       <span class="float f3">&#9830;</span>
       <span class="float f4">&#9827;</span>
+      <div class="lamp" aria-hidden="true"></div>
+      <div class="poster" aria-hidden="true"><b>HOLD 'EM</b><span>FARO &amp; POKER</span><i>est. 1887</i></div>
+      <div class="shelf" aria-hidden="true"></div>
     </div>
     <header class="top-bar">
       <div class="wallet">
@@ -101,6 +105,11 @@
     </header>
 
     <div id="tablewrap">
+      <div id="saloon" aria-hidden="true">
+        <span class="sconce l"></span><span class="sconce r"></span>
+        <span class="table-lamp"></span>
+      </div>
+      <div id="rail" aria-hidden="true"></div>
       <div id="felt"><span class="felt-mark" aria-hidden="true">&#9824;</span></div>
       <div id="center">
         <div id="pot"></div>
