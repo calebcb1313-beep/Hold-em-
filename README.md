@@ -24,8 +24,9 @@ node tools/engine-test.js
 The suite covers hand categories, kickers, wheel straights, ties, side pots, folded
 chips, odd chips, minimum raises, illegal actions, heads-up blinds, short all-ins that
 do not reopen betting, full raises that do, all-in calls, blind all-ins, folded-pot
-reporting, deterministic shuffles, exact replay reconstruction, and **3,000 simulated
-AI-vs-AI hands with a chip-conservation check after every action and settlement**.
+reporting, deterministic shuffles, exact replay reconstruction, validated replay JSON
+round-trips, and **3,000 simulated AI-vs-AI hands with a chip-conservation check after
+every action and settlement**.
 
 Browser UI assertions (real game in a 390px iframe, checking the raise panel and a
 reconstructed four-way all-in replay):
@@ -82,6 +83,11 @@ The last twelve hands are saved locally with the per-hand seed, starting stacks,
 and every engine-validated action. Choose **Replays** in the main menu to open a hand and
 step through the deal, betting, board, side pots and result. Replays are reconstructed by
 the same engine, so they are exact rather than a video recording.
+
+**Share a hand** from the replay viewer, or **Export all** from the replay list, to copy
+or download a versioned JSON file. **Import** accepts that file (or pasted JSON), checks
+every action through the engine, and rejects hands that cannot be reconstructed. Imported
+hands join the same twelve-hand list; duplicate imports are ignored.
 
 ## Opponents and presentation
 

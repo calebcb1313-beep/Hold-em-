@@ -3,6 +3,7 @@ const assert = require('assert');
 const path = require('path');
 const Core = require(path.join(__dirname, '..', 'www', 'poker-core.js'));
 const E = require(path.join(__dirname, '..', 'www', 'engine.js'));
+const RF = require(path.join(__dirname, '..', 'www', 'replay-format.js'));
 
 let passed = 0;
 function test(name, fn) {
@@ -239,6 +240,35 @@ test('a hand replays exactly from its seed and action log', () => {
   assert.deepStrictEqual(r.board, t.board);
   assert.deepStrictEqual(r.result.winners, t.result.winners);
   assert.strictEqual(r.chipTotal(), t.totalChips);
+});
+
+test('shared replay JSON round-trips and rejects illegal actions', () => {
+  const pre = [{ id: 'a', name: 'A', stack: 500 }, { id: 'b', name: 'B', stack: 500 }];
+  const t = new E.Table({ sb: 5, bb: 10, button: 0, seed: 4242, players: pre });
+  t.startHand();
+  const acts = [];
+  const play = (seat, action) => { t.act(seat, action); acts.push({ seat, action }); };
+  play(0, { type: 'call' }); play(1, { type: 'check' });
+  for (let s = 0; s < 3; s++) { play(1, { type: 'check' }); play(0, { type: 'check' }); }
+  const rec = {
+    hand: 7, handSeed: t.handSeed, sb: 5, bb: 10, button: 0,
+    players: pre, actions: acts, map: 'Share test', result: t.result
+  };
+  const text = RF.serialize([rec]);
+  assert.ok(text.includes('"format": "holdem-royale/replays"'));
+  const parsed = RF.parse(text, E);
+  assert.strictEqual(parsed.length, 1);
+  assert.deepStrictEqual(parsed[0].actions, acts);
+  assert.deepStrictEqual(parsed[0].result.winners, t.result.winners);
+  assert.deepStrictEqual(parsed[0].result.pots, t.result.pots);
+  const merged = RF.merge([], parsed);
+  assert.strictEqual(merged.added, 1);
+  const duplicate = RF.merge(merged.records, parsed);
+  assert.strictEqual(duplicate.added, 0);
+  assert.strictEqual(duplicate.records.length, 1);
+  const tampered = JSON.parse(text);
+  tampered.replays[0].actions[0].action = { type: 'check' };
+  assert.throws(() => RF.parse(JSON.stringify(tampered), E), /not legal/);
 });
 
 test('deterministic shuffled deck for a given seed', () => {

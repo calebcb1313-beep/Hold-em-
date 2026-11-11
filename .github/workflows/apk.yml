@@ -45,6 +45,8 @@ jobs:
             echo
             if [ -n "$RELEASE_KEYSTORE_BASE64" ]; then
               echo "Signed release build. Install the APK, or upload the AAB to Play Console."
+            elif [ -f "releases/holdem-royale-${VER}.apk" ] || [ -f "releases/holdem-royale-${VER}.aab" ]; then
+              echo "Includes the signed release artifacts checked into releases/."
             else
               echo "Preview build, debug-signed by CI. Add the release signing secrets to publish a signed APK and AAB."
             fi
@@ -61,14 +63,18 @@ jobs:
           cd android
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
-      # A signed APK checked in under releases/ is attached to the release even
-      # when the signing secrets are not configured on the repository.
-      - name: Collect signed APK
+      # Signed artifacts checked in under releases/ are attached even when the
+      # signing secrets are not configured on the repository.
+      - name: Collect checked-in signed artifacts
         run: |
           VER="${{ steps.ver.outputs.name }}"
           if [ -f "releases/holdem-royale-${VER}.apk" ]; then
             echo "SIGNED_APK=releases/holdem-royale-${VER}.apk" >> "$GITHUB_ENV"
             echo "Attaching signed APK: releases/holdem-royale-${VER}.apk"
+          fi
+          if [ -f "releases/holdem-royale-${VER}.aab" ]; then
+            echo "SIGNED_AAB=releases/holdem-royale-${VER}.aab" >> "$GITHUB_ENV"
+            echo "Attaching signed AAB: releases/holdem-royale-${VER}.aab"
           fi
 
       - uses: actions/upload-artifact@v4
@@ -122,3 +128,11 @@ jobs:
           files: |
             android/app/build/outputs/apk/debug/app-debug.apk
             ${{ env.SIGNED_APK }}
+
+      - name: Attach checked-in signed AAB
+        if: env.RELEASE_KEYSTORE_BASE64 == '' && env.SIGNED_AAB != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.name }}
+          fail_on_unmatched_files: true
+          files: ${{ env.SIGNED_AAB }}

@@ -36,6 +36,7 @@
       app.contentWindow.ReplayUI, 15000, 'game boot');
     const w = app.contentWindow, d = app.contentDocument, h = w.__hld;
     check(w.innerWidth === 390, 'phone viewport is 390px', 'got ' + w.innerWidth);
+    w.localStorage.removeItem('hlx_replays');
     h.S.speed = 'fast'; h.S.sound = false;
     h.startSession({ mode: 'quick', buyin: 2000, target: 999999, chips: 2000,
       seats: 4, bb: 20, skill: 0.4, mapIndex: 0, seed: 12345 });
@@ -99,6 +100,38 @@
     w.ReplayUI.openList();
     await sleep(80);
     check(!!d.querySelector('.rp-row'), 'recorded hand appears in replay list');
+
+    // Share and import flow.
+    const payload = w.ReplayUI.exportText([rec]);
+    const parsedPayload = JSON.parse(payload);
+    check(parsedPayload.format === 'holdem-royale/replays' &&
+      parsedPayload.replays.length === 1, 'replay exports as a JSON bundle');
+    w.ReplayUI.open(rec);
+    await sleep(80);
+    check(!!d.querySelector('#rpShare'), 'replay has a share control');
+    d.querySelector('#rpShare').click();
+    await sleep(80);
+    const shareText = d.querySelector('#rpShareText');
+    check(!!shareText && shareText.value.includes('holdem-royale/replays'),
+      'share sheet contains replay JSON');
+    check(!!d.querySelector('#rpCopy') && !!d.querySelector('#rpDownload'),
+      'share sheet has copy and download controls');
+    w.ReplayUI.openList();
+    await sleep(60);
+    d.querySelector('#rpImport').click();
+    await sleep(60);
+    const importArea = d.querySelector('#rpImportText');
+    check(!!importArea, 'import sheet opens');
+    importArea.value = payload;
+    d.querySelector('#rpImportGo').click();
+    await waitFor(() => d.querySelector('.rp-note'), 3000, 'import summary');
+    check(/Imported 1 hand/.test(d.querySelector('.rp-note').textContent),
+      'imported replay is saved', d.querySelector('.rp-note').textContent);
+    check(w.ReplayUI.records().some((x) => x.hand === 99 && x.handSeed === 777),
+      'imported replay is in local storage');
+    const count = w.ReplayUI.records().length;
+    w.ReplayUI.importText(payload);
+    check(w.ReplayUI.records().length === count, 'duplicate import is ignored');
     out.className = 'pass';
     out.dataset.result = 'PASS';
     out.textContent = 'UI TEST PASS\n' + results.map((r) => 'PASS ' + r.name +
