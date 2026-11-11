@@ -14,3 +14,8 @@ android/.gradle/
 holdem-royale-*.apk
 holdem-royale-*.aab
 tools/pydeps/
+
+# local dev server
+.server.pid
+server.log
+www/_phone.html
