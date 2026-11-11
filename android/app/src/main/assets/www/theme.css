@@ -326,6 +326,15 @@ body.four .card.s3 .pips{color:#2f7d4f}
 .rp-controls{display:flex;align-items:center;gap:6px;margin-bottom:8px}
 .rp-controls .btn{flex:1;height:40px;padding:0 6px;font-size:11px}
 .rp-step{font-size:10px;color:#7a5f38;white-space:nowrap;min-width:66px;text-align:right}
+.rp-io{display:flex;gap:6px;margin:8px 0}
+.rp-io .btn{flex:1;height:38px;padding:0 8px;font-size:11px}
+.rp-text{display:block;box-sizing:border-box;width:100%;min-height:148px;margin:8px 0;
+  padding:8px;border:1px solid #c3aa7d;border-radius:3px;background:rgba(255,252,242,.72);
+  color:#3a2813;font:11px/1.45 monospace;resize:vertical}
+.rp-note{margin:6px 0;padding:6px 8px;border-left:2px solid #9a6b26;
+  background:rgba(154,107,38,.09);font-size:11px;color:#5c4426}
+.rp-note:empty{display:none}
+.rp-note.err{border-left-color:#8a2f22;background:rgba(138,47,34,.08);color:#7a2a1f}
 .rp-list{display:flex;flex-direction:column;gap:5px;margin:8px 0 12px;max-height:46vh;overflow:auto}
 .rp-row{display:grid;grid-template-columns:70px 1fr;gap:2px 8px;text-align:left;
   padding:7px 8px;border:1px solid #c3aa7d;border-radius:3px;background:rgba(255,252,242,.5);
@@ -339,8 +348,9 @@ body.four .card.s3 .pips{color:#2f7d4f}
   .rp-players{grid-template-columns:1fr}
   .rp-board .card{--cw:40px}
   .rp-cards .card{--cw:24px}
-  .rp-controls{flex-wrap:wrap}
+  .rp-controls,.rp-io{flex-wrap:wrap}
   .rp-step{flex-basis:100%;text-align:center}
+  .rp-io .btn{flex:1 1 120px}
 }
 
 @media (prefers-reduced-motion: reduce) {
