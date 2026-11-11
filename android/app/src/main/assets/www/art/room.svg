@@ -1,94 +1,130 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice">
   <defs>
-    <pattern id="wallpaper" width="160" height="160" patternUnits="userSpaceOnUse">
-      <rect width="160" height="160" fill="#1d2a23"/>
-      <g fill="none" stroke="#39544541" stroke-width="1.2">
-        <path d="M80 18c14 18 14 34 0 52-14-18-14-34 0-52z"/>
-        <path d="M80 70c20 6 32 18 32 36-18-3-29-15-32-36z"/>
-        <path d="M80 70c-20 6-32 18-32 36 18-3 29-15 32-36z"/>
-        <circle cx="80" cy="130" r="5"/>
-      </g>
-    </pattern>
-    <linearGradient id="wallShade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0a0f0c" stop-opacity=".9"/>
-      <stop offset=".3" stop-color="#0a0f0c" stop-opacity=".1"/>
-      <stop offset=".7" stop-color="#000" stop-opacity=".25"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".8"/>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a3020"/><stop offset=".55" stop-color="#33200f"/><stop offset="1" stop-color="#1b110a"/>
     </linearGradient>
-    <linearGradient id="wainscot" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#4a3120"/>
-      <stop offset=".5" stop-color="#33210f"/>
-      <stop offset="1" stop-color="#1b1008"/>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a3a20"/><stop offset=".5" stop-color="#3a2413"/><stop offset="1" stop-color="#231409"/>
     </linearGradient>
-    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f0d9a4"/>
-      <stop offset=".5" stop-color="#b98b48"/>
-      <stop offset="1" stop-color="#6d4a22"/>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1a0f"/><stop offset="1" stop-color="#100906"/>
     </linearGradient>
-    <linearGradient id="paintA" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#c9b98f"/>
-      <stop offset=".55" stop-color="#8b7b52"/>
-      <stop offset="1" stop-color="#4a3f27"/>
+    <linearGradient id="frame" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c9a15c"/><stop offset=".5" stop-color="#7a5228"/><stop offset="1" stop-color="#3a2410"/>
     </linearGradient>
-    <linearGradient id="paintB" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#9aa7a0"/>
-      <stop offset=".55" stop-color="#5d6b64"/>
-      <stop offset="1" stop-color="#2c3733"/>
-    </linearGradient>
-    <radialGradient id="lampGlow" cx=".5" cy="0" r=".9">
-      <stop offset="0" stop-color="#ffd79a" stop-opacity=".22"/>
-      <stop offset="1" stop-color="#ffd79a" stop-opacity="0"/>
+    <radialGradient id="lamp" cx=".5" cy="0" r=".8">
+      <stop offset="0" stop-color="#ffd79a" stop-opacity=".55"/><stop offset=".5" stop-color="#ffbe73" stop-opacity=".16"/><stop offset="1" stop-color="#ffbe73" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="vignette" cx=".5" cy=".46" r=".72">
-      <stop offset=".5" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".72"/>
+    <radialGradient id="vig" cx=".5" cy=".45" r=".72">
+      <stop offset=".5" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".62"/>
+    </radialGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b7a86"/><stop offset=".55" stop-color="#c9a06a"/><stop offset="1" stop-color="#6b3a24"/>
+    </linearGradient>
+    <linearGradient id="river" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b5962"/><stop offset="1" stop-color="#16262c"/>
+    </linearGradient>
+    <pattern id="stripe" width="72" height="72" patternUnits="userSpaceOnUse">
+      <rect width="72" height="72" fill="none"/>
+      <rect x="30" width="12" height="72" fill="#e8c894" opacity=".035"/>
+      <path d="M36 14c7 8 7 16 0 24-7-8-7-16 0-24z M36 44c6 5 6 11 0 16-6-5-6-11 0-16z"
+            fill="none" stroke="#e8c894" stroke-opacity=".05" stroke-width="1.2"/>
+    </pattern>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+      <stop offset="0" stop-color="#ffcf8a" stop-opacity=".5"/><stop offset="1" stop-color="#ffcf8a" stop-opacity="0"/>
     </radialGradient>
   </defs>
 
-  <rect width="1600" height="1000" fill="url(#wallpaper)"/>
-  <rect width="1600" height="1000" fill="url(#wallShade)"/>
-  <rect width="1600" height="1000" fill="url(#lampGlow)"/>
-
-  <rect x="0" y="742" width="1600" height="258" fill="url(#wainscot)"/>
-  <rect x="0" y="736" width="1600" height="12" fill="#5a3d24"/>
-  <rect x="0" y="732" width="1600" height="4" fill="#8a6236" opacity=".5"/>
-  <g stroke="#170e07" stroke-width="3" opacity=".7">
-    <path d="M0 760h1600M0 900h1600"/>
-    <path d="M120 760v140M320 760v140M520 760v140M720 760v140M920 760v140M1120 760v140M1320 760v140M1520 760v140"/>
-  </g>
-  <g stroke="#7a5a34" stroke-width="1" opacity=".25">
-    <path d="M40 820h180M300 860h180M600 800h160M980 850h200M1300 806h180M60 960h220"/>
+  <rect width="1600" height="1000" fill="url(#wall)"/>
+  <rect width="1600" height="1000" fill="url(#stripe)"/>
+  <g opacity=".18" stroke="#e8c894" stroke-width="1" fill="none">
+    <path d="M120 120c26-18 52-14 65 6M1480 120c-26-18-52-14-65 6"/>
+    <path d="M240 260c20-13 40-10 50 5M1360 260c-20-13-40-10-50 5"/>
   </g>
 
-  <g transform="translate(148 168)">
-    <rect x="0" y="0" width="232" height="182" fill="#2a1a0e" stroke="url(#brass)" stroke-width="7"/>
-    <rect x="12" y="12" width="208" height="158" fill="url(#paintA)"/>
-    <path d="M12 128l46-52 34 38 26-24 44 46v34H12z" fill="#3f3620" opacity=".85"/>
-    <circle cx="168" cy="46" r="15" fill="#e8d3a2" opacity=".5"/>
-    <rect x="12" y="12" width="208" height="158" fill="none" stroke="#00000055" stroke-width="2"/>
+  <!-- wainscot and rail -->
+  <rect x="0" y="620" width="1600" height="180" fill="url(#wood)"/>
+  <g stroke="#1c1108" stroke-width="3" fill="none" opacity=".8">
+    <path d="M0 624h1600"/>
+    <rect x="60" y="652" width="300" height="112" rx="3"/>
+    <rect x="400" y="652" width="300" height="112" rx="3"/>
+    <rect x="740" y="652" width="300" height="112" rx="3"/>
+    <rect x="1080" y="652" width="300" height="112" rx="3"/>
   </g>
-  <g transform="translate(1222 200)">
-    <rect x="0" y="0" width="232" height="182" fill="#2a1a0e" stroke="url(#brass)" stroke-width="7"/>
-    <rect x="12" y="12" width="208" height="158" fill="url(#paintB)"/>
-    <path d="M12 136l52-30 30 22 40-46 34 34 28-14v46H12z" fill="#2f3a34" opacity=".9"/>
-    <rect x="12" y="12" width="208" height="158" fill="none" stroke="#00000055" stroke-width="2"/>
+  <g fill="none" stroke="#7a5230" stroke-width="2" opacity=".55">
+    <rect x="64" y="656" width="292" height="104" rx="2"/>
+    <rect x="404" y="656" width="292" height="104" rx="2"/>
+    <rect x="744" y="656" width="292" height="104" rx="2"/>
+    <rect x="1084" y="656" width="292" height="104" rx="2"/>
+  </g>
+  <rect x="0" y="798" width="1600" height="16" fill="#1a1008"/>
+  <rect x="0" y="798" width="1600" height="3" fill="#8a5f31" opacity=".55"/>
+
+  <!-- floor -->
+  <rect x="0" y="814" width="1600" height="186" fill="url(#floor)"/>
+  <g stroke="#0b0603" stroke-width="4" opacity=".8">
+    <path d="M0 858h1600M0 906h1600M0 958h1600"/>
+  </g>
+  <g stroke="#6b4526" stroke-width="1.4" opacity=".35">
+    <path d="M120 814v186M420 814v186M760 814v186M1120 814v186M1440 814v186"/>
+    <path d="M0 858h1600M0 906h1600M0 958h1600"/>
   </g>
 
-  <g opacity=".9">
-    <rect x="58" y="440" width="210" height="10" rx="2" fill="#5a3d24"/>
-    <rect x="58" y="450" width="210" height="6" fill="#2a1a0e"/>
-    <g fill="#2f4a35" stroke="#00000066">
-      <path d="M86 440v-58c0-8 8-12 12-4l6 62z" fill="#2e4a34"/>
-      <path d="M118 440v-74c0-9 9-13 13-3l5 77z" fill="#4a3a1c"/>
-      <path d="M152 440v-50c0-8 7-11 11-4l6 54z" fill="#3a3020"/>
-      <rect x="175" y="398" width="22" height="42" rx="3" fill="#5c3a1e"/>
-    </g>
+  <!-- framed paintings -->
+  <g>
+    <rect x="96" y="132" width="356" height="292" rx="4" fill="url(#frame)" stroke="#1a1008" stroke-width="5"/>
+    <rect x="118" y="154" width="312" height="248" fill="#2a1a10"/>
+    <rect x="128" y="164" width="292" height="228" fill="url(#sky)"/>
+    <circle cx="352" cy="214" r="26" fill="#ffe0a2" opacity=".85"/>
+    <path d="M128 340l70-96 52 60 44-40 76 76z" fill="#6b3a24"/>
+    <path d="M128 348l60-58 55 34 52-26 63 50z" fill="#3a2010"/>
+    <path d="M128 300c40 8 80 6 120-6s100-14 172 4v94H128z" fill="#8a5230" opacity=".55"/>
+    <g stroke="#c9a15c" stroke-width="1" opacity=".35"><path d="M128 200h292M128 330h292"/></g>
+    <rect x="96" y="132" width="356" height="292" rx="4" fill="none" stroke="#e8c894" stroke-opacity=".25" stroke-width="1.5"/>
+  </g>
+  <g>
+    <rect x="1148" y="150" width="356" height="274" rx="4" fill="url(#frame)" stroke="#1a1008" stroke-width="5"/>
+    <rect x="1170" y="172" width="312" height="230" fill="#2a1a10"/>
+    <rect x="1180" y="182" width="292" height="210" fill="url(#sky)"/>
+    <path d="M1180 330c40-20 74-16 110-4s92 14 182-14v80h-292z" fill="url(#river)"/>
+    <path d="M1260 316h120l-14 30h-92z" fill="#e8dcc0"/>
+    <path d="M1284 300h72l-6 18h-60z" fill="#f0e6cc"/>
+    <path d="M1310 274v-26h6v-14h4v52" stroke="#3a2410" stroke-width="3" fill="none"/>
+    <g stroke="#c9a15c" stroke-width="1" opacity=".3"><path d="M1180 210h292M1180 360h292"/></g>
+    <rect x="1148" y="150" width="356" height="274" rx="4" fill="none" stroke="#e8c894" stroke-opacity=".22" stroke-width="1.4"/>
   </g>
 
-  <g fill="#e6c98f" opacity=".5">
-    <circle cx="130" cy="620" r="3"/>
-    <circle cx="1470" cy="640" r="3"/>
+  <!-- sconces -->
+  <g>
+    <rect x="470" y="196" width="10" height="34" fill="#3a2410"/>
+    <path d="M452 200h46l-8 20h-30z" fill="#8a6330" stroke="#1a1008" stroke-width="2"/>
+    <ellipse cx="475" cy="222" rx="6" ry="10" fill="#ffd79a"/>
+    <ellipse cx="475" cy="222" rx="16" ry="24" fill="url(#glow)" opacity=".8"/>
+    <path d="M475 90c14 0 26 12 26 26s-12 26-26 26-26-12-26-26 12-26 26-26z" fill="url(#lamp)" opacity=".4"/>
+  </g>
+  <g>
+    <rect x="1120" y="196" width="10" height="34" fill="#3a2410"/>
+    <path d="M1102 200h46l-8 20h-30z" fill="#8a6330" stroke="#1a1008" stroke-width="2"/>
+    <ellipse cx="1125" cy="222" rx="6" ry="10" fill="#ffd79a"/>
+    <ellipse cx="1125" cy="222" rx="16" ry="24" fill="url(#glow)" opacity=".8"/>
   </g>
 
-  <rect width="1600" height="1000" fill="url(#vignette)"/>
+  <!-- hanging lamp -->
+  <g>
+    <path d="M800 0v88" stroke="#140c06" stroke-width="4"/>
+    <path d="M800 74c-8 0-14 5-16 12h32c-2-7-8-12-16-12z" fill="#8a6330" stroke="#0f0904" stroke-width="2"/>
+    <path d="M800 84l38 62H762z" fill="#2a1a0d" stroke="#0f0904" stroke-width="3"/>
+    <path d="M800 90l32 54H768z" fill="none" stroke="#c9a15c" stroke-opacity=".45" stroke-width="2"/>
+    <path d="M772 128h56" stroke="#ffd79a" stroke-opacity=".75" stroke-width="3"/>
+    <ellipse cx="800" cy="150" rx="44" ry="9" fill="#ffd79a" opacity=".8"/>
+    <ellipse cx="800" cy="520" rx="560" ry="420" fill="url(#lamp)" opacity=".55"/>
+  </g>
+
+  <!-- grain and vignette -->
+  <rect width="1600" height="1000" filter="url(#grain)" opacity=".06"/>
+  <rect width="1600" height="1000" fill="url(#vig)"/>
 </svg>

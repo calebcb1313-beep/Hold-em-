@@ -207,6 +207,18 @@
     bluffer: { callMargin: -0.03, bluff: 2.7, raise: 1.05, size: 1.4, pace: 0.75 }
   };
 
+  // Every regular has a signature habit. Two sharks are never the same shark.
+  const QUIRKS = [
+    { id: 'overbettor', label: 'overbets', size: 1.28, bluff: 1.05, pace: 1.0, raise: 1.0 },
+    { id: 'minbettor', label: 'min-bets', size: 0.68, bluff: 0.9, pace: 1.1, raise: 0.8 },
+    { id: 'checkraiser', label: 'check-raises', size: 1.12, bluff: 1.15, pace: 1.05, raise: 1.3 },
+    { id: 'floater', label: 'floats flops', size: 0.95, bluff: 1.2, pace: 1.0, raise: 0.9 },
+    { id: 'tank', label: 'tanks', size: 1.0, bluff: 0.95, pace: 1.9, raise: 1.0 },
+    { id: 'snap', label: 'snap-acts', size: 1.05, bluff: 1.05, pace: 0.45, raise: 1.0 },
+    { id: 'talker', label: 'chatters', size: 1.0, bluff: 1.1, pace: 0.9, raise: 1.0 },
+    { id: 'grinder', label: 'grinds small pots', size: 0.85, bluff: 0.75, pace: 1.05, raise: 0.9 }
+  ];
+
   function strategyFor(a, r) {
     return {
       vpip: clamp(a.vpip + (r() - 0.5) * 0.09, 0.08, 0.82),
@@ -235,6 +247,7 @@
       for (const x of pool) { t -= x.w; if (t <= 0) { a = x; break; } }
     }
 
+    const quirk = pick(QUIRKS, r);
     const band = clamp(skill == null ? 0.4 : skill, 0, 1);
     const bot = Object.assign({
       id: 'b' + i + '_' + Math.floor(r() * 1e7).toString(36),
@@ -245,14 +258,17 @@
       skill: clamp(0.42 + band * 0.58 + (r() - 0.5) * 0.1, 0.3, 1),
       noise: clamp(0.12 - band * 0.075 + (r() - 0.5) * 0.03, 0.02, 0.15),
       chat: a.chat,
+      quirk: quirk.label,
+      quirkId: quirk.id,
+      talk: quirk.id === 'talker' ? 0.8 : 0.35,
       persona: (() => {
         const base = PERSONA[a.id] || PERSONA.solver;
         return {
           callMargin: clamp(base.callMargin + (r() - 0.5) * 0.03, -0.24, 0.18),
-          bluff: base.bluff * (0.85 + r() * 0.3),
-          raise: base.raise * (0.85 + r() * 0.3),
-          size: base.size * (0.9 + r() * 0.2),
-          pace: base.pace * (0.92 + r() * 0.16)
+          bluff: base.bluff * (0.85 + r() * 0.3) * quirk.bluff,
+          raise: base.raise * (0.85 + r() * 0.3) * quirk.raise,
+          size: base.size * (0.9 + r() * 0.2) * quirk.size,
+          pace: base.pace * (0.92 + r() * 0.16) * quirk.pace
         };
       })(),
       tells: {
@@ -297,10 +313,12 @@
     r = r || Math.random;
     let aggr = 0.78 + r() * 0.46;
     let loose = 0.86 + r() * 0.32;
+    // Gear changes every hand: the same player shows up differently.
+    const gear = pick(['normal', 'normal', 'pressure', 'value', 'trap', 'loose'], r);
     if (r() < 0.14) { aggr = 1.35; loose = 1.25; }        // "feeling it" hand
     else if (r() < 0.1) { aggr = 0.55; loose = 0.72; }    // distracted / card dead
     const tilt = bot.tilt > 0 ? 1 + bot.tilt * 0.5 : 1;
-    return { aggr: aggr * tilt, loose: loose * (1 + bot.tilt * 0.2) };
+    return { aggr: aggr * tilt, loose: loose * (1 + bot.tilt * 0.2), gear: gear };
   }
 
   function read(bot) {
@@ -393,7 +411,7 @@
     const a = (bot.aggrCount || 0) / post;
     const style = v >= 0.45 ? 'Loose' : v <= 0.2 ? 'Tight' : 'Balanced';
     const postLabel = (a >= 0.22 || p >= 0.35) ? 'aggressive' : a <= 0.06 ? 'passive' : 'measured';
-    return style + ' - ' + postLabel;
+    return style + ' - ' + postLabel + (bot.quirk ? ' - ' + bot.quirk : '');
   }
 
   function chatFor(bot, kind, r) {
@@ -432,7 +450,7 @@
     const aggroRead = clamp(reads.aggAggr == null ? 0.35 : reads.aggAggr, 0, 1);
 
     const mood = bot.mood || (bot.mood = newMood(bot, R));
-    const aggr = clamp(bot.aggr * mood.aggr, 0.05, 1.3);
+    let aggr = clamp(bot.aggr * mood.aggr * (mood.gear === 'pressure' ? 1.24 : mood.gear === 'value' ? 0.92 : 1), 0.05, 1.3);
     const loose = mood.loose;
     const skill = clamp(bot.skill, 0.3, 1);
     const stick = bot.callDown - 0.5;
@@ -512,11 +530,25 @@
         if (suited && conn && ps > 0.4 && R() < 0.22) return { type: 'call' };
         return { type: 'fold' };
       }
-      const defend = clamp(0.82 - pos * 0.06 - (loose - 1) * 0.14 - stick * 0.06
-        - maniac * 0.1 - (aggroRead - 0.35) * 0.08, 0.5, 0.95);
+      // Chen strength is not equity. A flat 0.82 bar meant only the absolute
+      // top of the range answered a raise, so one real bet won every pot.
+      const price = toCall / (pot + toCall);
+      const defend = clamp(0.30 + price * 0.55 - pos * 0.04 - stick * 0.16
+        - maniac * 0.12 - (loose - 1) * 0.14 - (aggroRead - 0.35) * 0.08
+        + persona.callMargin * 0.6, 0.12, 0.72);
+      const bigOpen = cur > bb * 4;
       if (ps > 0.93 && canRaise && R() < 0.78) return raiseTo(roundBB(Math.max(cur * 3, bb * 9)));
       if (ps > 0.78 && canRaise && R() < aggr * 0.55) return raiseTo(roundBB(cur * 2.8));
+      // Big opens are polarised. The aggressive seats punish them instead of
+      // handing over the blinds, especially a hero who keeps overbetting.
+      if (bigOpen && canRaise && (suited || pair || conn) &&
+        R() < clamp(0.05 + aggr * 0.12 + (hero.overbets || 0) * 0.16 + persona.bluff * 0.03, 0, 0.4)) {
+        return raiseTo(roundBB(cur * 2.6));
+      }
       if (ps > defend) return { type: 'call' };
+      if (bigOpen && (pair || (suited && conn) || ps > 0.42) && R() < 0.55 + stick * 0.3) {
+        return { type: 'call' };
+      }
       if (toCall <= bb * 2.5 && (pair || (suited && conn)) && ps > 0.34 && R() < 0.5 + stick * 0.3) {
         return { type: 'call' };
       }
@@ -591,8 +623,15 @@
     // The price, with small exploit adjustments. A flat safety tax here made
     // bots surrender routinely priced hands; a call now needs equity above the
     // real pot odds, not above them plus a premium.
-    const need = potOdds + 0.01 - implied - stick * 0.04 - maniac * 0.05
+    let need = potOdds + 0.01 - implied - stick * 0.04 - maniac * 0.05
       - bluffCatch + (1 - skill) * 0.015 + persona.callMargin;
+    // An overbet is a polarised line, not a value line. Treating it as pure
+    // price made every big bet an uncontested win; bluff-catchers now look it
+    // up, and seats that have watched the hero overbet do it more often.
+    const overbet = toCall > pot * 0.8;
+    if (mood.gear === 'loose') need -= 0.055;
+    if (mood.gear === 'trap') need += 0.02;
+    if (mood.gear === 'value' && !draw && made <= 1) need += 0.04;
 
     if (toCall >= myChips * 0.75) {
       const shoveNeed = need + 0.01 - maniac * 0.05 - stick * 0.02;
@@ -610,6 +649,7 @@
     if (strong) {
       bot.plan = { kind: 'value', street };
       if (canRaise && R() < clamp(aggr * 0.5 * persona.raise, 0, 0.95)) return sizeTo(0.9);
+      if (canRaise && bot.quirkId === 'checkraiser' && toCall <= pot * 0.6 && R() < 0.32) return sizeTo(1.0);
       return { type: 'call' };
     }
     if (callEq > need + 0.02) {
@@ -629,6 +669,12 @@
       return sizeTo(boardScary ? 1.05 : 0.8);
     }
     if (made >= 1 && callEq > need - 0.06 && R() < 0.4 + bot.callDown * 0.3) {
+      return { type: 'call' };
+    }
+    if (overbet && made >= 1 && R() < 0.3 + bot.callDown * 0.35 + (hero.overbets || 0) * 0.25) {
+      return { type: 'call' };
+    }
+    if (bot.quirkId === 'floater' && street === 1 && toCall < pot * 0.42 && R() < 0.42) {
       return { type: 'call' };
     }
     bot.plan = null;

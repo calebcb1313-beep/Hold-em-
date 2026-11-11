@@ -1,93 +1,131 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" preserveAspectRatio="none">
   <defs>
-    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#6b4a2b"/>
-      <stop offset=".45" stop-color="#4a3120"/>
-      <stop offset="1" stop-color="#2a1a0f"/>
+    <linearGradient id="oak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a5230"/><stop offset=".32" stop-color="#5a3a20"/>
+      <stop offset=".72" stop-color="#3a2413"/><stop offset="1" stop-color="#241407"/>
     </linearGradient>
-    <linearGradient id="rail" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#5b3f27"/>
-      <stop offset=".5" stop-color="#3a2717"/>
-      <stop offset="1" stop-color="#1f140b"/>
+    <linearGradient id="hide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6b4a2c"/><stop offset=".35" stop-color="#4a2f1a"/>
+      <stop offset=".75" stop-color="#2e1b0d"/><stop offset="1" stop-color="#1d1008"/>
     </linearGradient>
-    <radialGradient id="felt" cx=".5" cy=".36" r=".78">
-      <stop offset="0" stop-color="#2a8a63"/>
-      <stop offset=".38" stop-color="#17714f"/>
-      <stop offset=".72" stop-color="#0d4b36"/>
-      <stop offset="1" stop-color="#06281d"/>
+    <radialGradient id="cloth" cx=".5" cy=".34" r=".82">
+      <stop offset="0" stop-color="#2f9670"/><stop offset=".3" stop-color="#1d7d59"/>
+      <stop offset=".62" stop-color="#12603f"/><stop offset=".86" stop-color="#0a3f2a"/>
+      <stop offset="1" stop-color="#052a1c"/>
     </radialGradient>
-    <radialGradient id="pool" cx=".5" cy=".1" r=".7">
-      <stop offset="0" stop-color="#ffe2ad" stop-opacity=".22"/>
-      <stop offset="1" stop-color="#ffe2ad" stop-opacity="0"/>
+    <radialGradient id="pool" cx=".5" cy=".06" r=".72">
+      <stop offset="0" stop-color="#ffe4ad" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#ffe4ad" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="vig" cx=".5" cy=".5" r=".72">
-      <stop offset=".62" stop-color="#000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000" stop-opacity=".42"/>
+    <radialGradient id="vig" cx=".5" cy=".5" r=".74">
+      <stop offset=".58" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".46"/>
     </radialGradient>
-    <pattern id="damask" width="120" height="104" patternUnits="userSpaceOnUse">
-      <g fill="none" stroke="#dff3e6" stroke-opacity=".16" stroke-width="1.1">
-        <path d="M60 8c9 12 9 22 0 34-9-12-9-22 0-34z"/>
-        <path d="M60 42c14 4 22 12 22 24-12-2-20-10-22-24z"/>
-        <path d="M60 42c-14 4-22 12-22 24 12-2 20-10 22-24z"/>
-        <circle cx="60" cy="86" r="4"/>
+    <pattern id="weave" width="7" height="7" patternUnits="userSpaceOnUse">
+      <path d="M0 3.5h7M3.5 0v7" stroke="#ffffff" stroke-opacity=".035" stroke-width="1"/>
+    </pattern>
+    <pattern id="damask" width="150" height="128" patternUnits="userSpaceOnUse">
+      <g fill="none" stroke="#d8f2e4" stroke-opacity=".11" stroke-width="1.1">
+        <path d="M75 10c10 12 10 24 0 38-10-14-10-26 0-38z"/>
+        <path d="M75 48c16 5 26 14 26 28-14-3-24-12-26-28z"/>
+        <path d="M75 48c-16 5-26 14-26 28 14-3 24-12 26-28z"/>
+        <path d="M75 48c0 14 0 26 0 34"/>
+        <circle cx="75" cy="100" r="3.2"/>
+        <path d="M40 92c8 2 12 6 14 12M110 92c-8 2-12 6-14 12" stroke-opacity=".07"/>
       </g>
     </pattern>
-    <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <filter id="grain">
       <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/>
       <feColorMatrix type="saturate" values="0"/>
     </filter>
-    <path id="arcTop" d="M300 250 A320 200 0 0 1 900 250"/>
-    <path id="arcBot" d="M330 540 A310 190 0 0 0 870 540"/>
+    <path id="arcTop" d="M338 236 A330 204 0 0 1 862 236"/>
+    <path id="arcBot" d="M360 548 A318 188 0 0 0 840 548"/>
   </defs>
 
-  <ellipse cx="600" cy="380" rx="596" ry="376" fill="url(#wood)"/>
-  <ellipse cx="600" cy="380" rx="596" ry="376" fill="none" stroke="#1a1009" stroke-width="6"/>
-  <g stroke="#2a1b10" stroke-width="2" opacity=".55">
-    <ellipse cx="600" cy="380" rx="580" ry="362" fill="none"/>
-    <ellipse cx="600" cy="380" rx="566" ry="350" fill="none"/>
+  <!-- oak body with grain -->
+  <ellipse cx="600" cy="380" rx="596" ry="376" fill="url(#oak)"/>
+  <g fill="none" stroke="#2a1a0e" stroke-width="1.6" opacity=".5">
+    <ellipse cx="600" cy="380" rx="588" ry="369"/><ellipse cx="600" cy="380" rx="575" ry="358"/>
+    <ellipse cx="600" cy="380" rx="562" ry="348"/>
+  </g>
+  <g fill="none" stroke="#c9a15c" stroke-opacity=".18" stroke-width="1.2">
+    <ellipse cx="600" cy="380" rx="592" ry="372"/>
+  </g>
+  <path d="M40 208c60-30 120-46 180-52M1160 208c-60-30-120-46-180-52"
+        fill="none" stroke="#ffd9a0" stroke-opacity=".14" stroke-width="3"/>
+  <path d="M28 552c60 34 120 50 180 55M1172 552c-60 34-120 50-180 55"
+        fill="none" stroke="#120a05" stroke-opacity=".45" stroke-width="4"/>
+  <ellipse cx="600" cy="380" rx="596" ry="376" fill="none" stroke="#140c06" stroke-width="7"/>
+
+  <!-- leather rail -->
+  <ellipse cx="600" cy="380" rx="552" ry="340" fill="url(#hide)"/>
+  <ellipse cx="600" cy="380" rx="552" ry="340" fill="none" stroke="#1a0f07" stroke-width="3"/>
+  <ellipse cx="600" cy="380" rx="538" ry="330" fill="none" stroke="#c9a15c" stroke-opacity=".22" stroke-width="1.4"/>
+  <!-- stitching -->
+  <ellipse cx="600" cy="380" rx="524" ry="319" fill="none" stroke="#e6cf9f" stroke-opacity=".4"
+           stroke-width="2" stroke-dasharray="6 8"/>
+  <ellipse cx="600" cy="380" rx="512" ry="310" fill="none" stroke="#1a1008" stroke-opacity=".55"
+           stroke-width="3"/>
+  <!-- brass nails -->
+  <g fill="#d9b678" stroke="#4a3116" stroke-width="1">
+    <circle cx="600" cy="42" r="4.2"/><circle cx="600" cy="718" r="4.2"/>
+    <circle cx="48" cy="380" r="4.2"/><circle cx="1152" cy="380" r="4.2"/>
+    <circle cx="209" cy="110" r="4"/><circle cx="991" cy="110" r="4"/>
+    <circle cx="209" cy="650" r="4"/><circle cx="991" cy="650" r="4"/>
+    <circle cx="96" cy="228" r="3.6"/><circle cx="1104" cy="228" r="3.6"/>
+    <circle cx="96" cy="532" r="3.6"/><circle cx="1104" cy="532" r="3.6"/>
   </g>
 
-  <ellipse cx="600" cy="380" rx="552" ry="340" fill="url(#rail)"/>
-  <ellipse cx="600" cy="380" rx="552" ry="340" fill="none" stroke="#c9a15c" stroke-opacity=".45" stroke-width="2"/>
-  <ellipse cx="600" cy="380" rx="530" ry="322" fill="none" stroke="#c9a15c" stroke-opacity=".55"
-           stroke-width="7" stroke-dasharray="2 30" stroke-linecap="round"/>
-  <ellipse cx="600" cy="380" rx="516" ry="312" fill="none" stroke="#e6cf9f" stroke-opacity=".22"
-           stroke-width="1.5" stroke-dasharray="7 9"/>
-
-  <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#felt)"/>
+  <!-- felt -->
+  <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#cloth)"/>
+  <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#weave)"/>
   <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#damask)"/>
   <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#pool)"/>
+  <ellipse cx="600" cy="380" rx="500" ry="298" fill="none" stroke="#041f15" stroke-width="4" opacity=".55"/>
 
+  <!-- embroidered border: chain stitch + inner rule -->
   <g fill="none" stroke="#e9d3a0">
-    <ellipse cx="600" cy="380" rx="468" ry="272" stroke-opacity=".38" stroke-width="2" stroke-dasharray="3 10"/>
-    <ellipse cx="600" cy="380" rx="452" ry="260" stroke-opacity=".24" stroke-width="1.4"/>
-    <ellipse cx="600" cy="380" rx="424" ry="240" stroke-opacity=".12" stroke-width="1"/>
+    <ellipse cx="600" cy="380" rx="466" ry="270" stroke-opacity=".36" stroke-width="2.4" stroke-dasharray="7 6"/>
+    <ellipse cx="600" cy="380" rx="452" ry="260" stroke-opacity=".2" stroke-width="1.2"/>
+    <ellipse cx="600" cy="380" rx="424" ry="241" stroke-opacity=".1" stroke-width="1"/>
+  </g>
+  <g fill="none" stroke="#e9d3a0" stroke-opacity=".3" stroke-width="2">
+    <path d="M330 212c14-12 30-13 42-4M870 212c-14-12-30-13-42-4"/>
+    <path d="M330 548c14 12 30 13 42 4M870 548c-14 12-30 13-42 4"/>
   </g>
 
-  <g fill="#f0dcae" opacity=".5" font-family="Georgia, 'Times New Roman', serif">
-    <text font-size="26" letter-spacing="10" text-anchor="middle">
+  <!-- arc lettering, kept inside the cloth -->
+  <g fill="#f0dcae" opacity=".55" font-family="Georgia, 'Times New Roman', serif">
+    <text font-size="24" letter-spacing="9" text-anchor="middle">
       <textPath href="#arcTop" startOffset="50%">HOLD 'EM ROYALE</textPath>
     </text>
-    <text font-size="12" letter-spacing="6" text-anchor="middle" opacity=".7">
+    <text font-size="11" letter-spacing="6" text-anchor="middle" opacity=".7">
       <textPath href="#arcBot" startOffset="50%">SALOON &#183; EST. 1887</textPath>
     </text>
   </g>
 
-  <g transform="translate(600 386)" fill="none" stroke="#f0dcae" stroke-opacity=".3">
-    <path d="M-150 0h96M54 0h96" stroke-width="1"/>
-    <path d="M-54 0l10-8 10 8-10 8zM54 0l-10-8-10 8 10 8z" fill="#f0dcae" fill-opacity=".28" stroke="none"/>
+  <!-- crest -->
+  <g transform="translate(600 388)" fill="none" stroke="#f0dcae" stroke-opacity=".3">
+    <path d="M-172 0h112M60 0h112" stroke-width="1.2"/>
+    <path d="M-58 0l10-8 10 8-10 8zM58 0l-10-8-10 8 10 8z" fill="#f0dcae" fill-opacity=".26" stroke="none"/>
+    <path d="M-96-56c-18 16-26 32-24 50 2 16 12 28 24 34M96-56c18 16 26 32 24 50-2 16-12 28-24 34"
+          stroke-width="1.4" stroke-opacity=".22"/>
   </g>
   <g transform="translate(600 372)">
-    <path d="M0-64c26 30 46 52 46 74 0 24-21 42-46 42s-46-18-46-42c0-22 20-44 46-74z"
-          fill="#e9d3a0" fill-opacity=".14" stroke="#f0dcae" stroke-opacity=".38" stroke-width="2"/>
-    <path d="M0 52v18M-14 70h28" stroke="#f0dcae" stroke-opacity=".3" stroke-width="2"/>
+    <path d="M0-66c27 31 48 54 48 77 0 26-22 44-48 44s-48-18-48-44c0-23 21-46 48-77z"
+          fill="#e9d3a0" fill-opacity=".12" stroke="#f0dcae" stroke-opacity=".36" stroke-width="2"/>
+    <path d="M0-34c10 13 17 22 17 31 0 11-8 17-17 17s-17-6-17-17c0-9 7-18 17-31z"
+          fill="#e9d3a0" fill-opacity=".2" stroke="none"/>
+    <path d="M0 58v16M-13 74h26" stroke="#f0dcae" stroke-opacity=".28" stroke-width="2"/>
   </g>
 
-  <g stroke="#f0dcae" stroke-opacity=".16" fill="none" stroke-width="1.6">
-    <path d="M150 176c22-18 46-18 62-4M1050 176c-22-18-46-18-62-4"/>
-    <path d="M150 584c22 18 46 18 62 4M1050 584c-22 18-46 18-62 4"/>
+  <!-- wear: faint stains and edge scuffs -->
+  <g opacity=".1">
+    <ellipse cx="380" cy="300" rx="64" ry="34" fill="#03160e"/>
+    <ellipse cx="820" cy="470" rx="86" ry="40" fill="#03160e"/>
+    <ellipse cx="700" cy="220" rx="46" ry="24" fill="#03160e"/>
   </g>
 
   <ellipse cx="600" cy="380" rx="500" ry="298" fill="url(#vig)"/>
-  <ellipse cx="600" cy="380" rx="596" ry="376" fill="#fff" opacity=".045" filter="url(#grain)"/>
+  <ellipse cx="600" cy="380" rx="596" ry="376" fill="#fff" opacity=".05" filter="url(#grain)"/>
 </svg>

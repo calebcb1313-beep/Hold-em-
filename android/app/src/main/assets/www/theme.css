@@ -158,3 +158,58 @@
   .act{font-size:10.5px;letter-spacing:.06em;height:52px}
   .panel:before,.sheet:before{inset:4px}
 }
+
+/* ============================================================
+   CHIPS, PRINTED CARDS, POT
+   The pot was painted underneath the mat; chips now sit on top
+   and travel from the seat into the middle.
+   ============================================================ */
+#center{z-index:3;top:46%}
+.read{max-width:48vw;overflow:hidden;text-overflow:ellipsis}
+#pot:not(:empty){padding:5px 13px 5px 8px;gap:9px}
+.cstack{display:inline-flex;align-items:center;flex:none}
+.chipdisc{display:block;width:15px;height:15px;border-radius:50%;margin-left:-7px;flex:none;
+  border:1px solid rgba(0,0,0,.5);position:relative;
+  background:radial-gradient(circle at 34% 26%,#fffaf0 0 18%,#ecd7ac 40%,#c9a469 72%,#8d6a3a 100%);
+  box-shadow:0 2px 0 rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,255,255,.28)}
+.chipdisc:first-child{margin-left:0}
+.chipdisc:after{content:"";position:absolute;inset:3px;border-radius:50%;
+  border:1px dashed rgba(0,0,0,.22)}
+.c5{background:radial-gradient(circle at 34% 26%,#f3b9a6,#b34a35 52%,#7a2418)}
+.c25{background:radial-gradient(circle at 34% 26%,#a8e0c0,#2f8a63 52%,#145139)}
+.c100{background:radial-gradient(circle at 34% 26%,#8f8f93,#2c2c31 52%,#111114)}
+.c500{background:radial-gradient(circle at 34% 26%,#d9c0f0,#7a4fa4 52%,#43275e)}
+.c1k{background:radial-gradient(circle at 34% 26%,#ffe9a8,#d2a33f 52%,#8a6420)}
+.chipfly{position:fixed;z-index:950;pointer-events:none}
+.chipfly .chipdisc{width:17px;height:17px}
+#pot .chipdisc{width:16px;height:16px}
+.bet .chipdisc{width:13px;height:13px;margin-left:-6px}
+.bet b{font:inherit;color:inherit}
+.bet .cstack{margin-right:1px}
+
+/* printed card faces: rank pips, not a letter in a box */
+.card.up .s{right:auto;left:9%;top:calc(var(--cw)*.47);bottom:auto;
+  font-size:calc(var(--cw)*.22);opacity:.9}
+.card .pips{position:absolute;inset:26% 14% 12%;display:grid;pointer-events:none;
+  grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(7,1fr);color:#20262a}
+.card .pips i{grid-column:var(--x);grid-row:var(--y);display:grid;place-items:center;
+  font-style:normal;font-size:calc(var(--cw,46px)*.19);line-height:1;opacity:.92}
+.card .pips.ace i{font-size:calc(var(--cw,46px)*.5)}
+.card .pips.court{inset:11% 8% 9%;display:block}
+.card .pips.court b{position:absolute;inset:15% 12%;border:1px solid currentColor;border-radius:2px;
+  display:grid;place-items:center;font-family:var(--ornate);font-weight:700;opacity:.82;
+  font-size:calc(var(--cw,46px)*.44);
+  background:repeating-linear-gradient(45deg,rgba(120,90,50,.06) 0 2px,transparent 2px 6px)}
+.card .pips.court i{position:absolute;font-style:normal;font-size:calc(var(--cw,46px)*.19);opacity:.85;
+  left:0;right:0;text-align:center}
+.card .pips.court i.up{top:0}
+.card .pips.court i.dn{bottom:0;transform:rotate(180deg)}
+.card.s1 .pips{color:#a6352a}
+.card.s2 .pips{color:#a6352a}
+.card.s0 .pips,.card.s3 .pips{color:#20262a}
+body.four .card.s2 .pips{color:#bb7314}
+body.four .card.s3 .pips{color:#2f7d4f}
+.seat:not(.hero) .hole .pips{display:none}
+.card.back:after{content:"\2660";display:grid;place-items:center;
+  font-size:calc(var(--cw,46px)*.34);color:rgba(240,217,164,.42);
+  text-shadow:0 1px 0 rgba(0,0,0,.55)}

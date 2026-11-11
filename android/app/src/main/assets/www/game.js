@@ -157,8 +157,28 @@
   const modalOpen = () => $('#modal').classList.contains('on');
 
   /* ================= cards ================= */
+  // Every rank gets a real pip layout, so the deck reads as printed cards
+  // instead of two letters in a box.
+  const PIPS = [
+    [[2, 1], [2, 7]], [[2, 1], [2, 4], [2, 7]], [[1, 1], [3, 1], [1, 7], [3, 7]],
+    [[1, 1], [3, 1], [2, 4], [1, 7], [3, 7]],
+    [[1, 1], [3, 1], [1, 4], [3, 4], [1, 7], [3, 7]],
+    [[1, 1], [3, 1], [1, 4], [3, 4], [1, 7], [3, 7], [2, 2]],
+    [[1, 1], [3, 1], [1, 4], [3, 4], [1, 7], [3, 7], [2, 2], [2, 6]],
+    [[1, 1], [3, 1], [1, 3], [3, 3], [1, 5], [3, 5], [1, 7], [3, 7], [2, 4]],
+    [[1, 1], [3, 1], [1, 3], [3, 3], [1, 5], [3, 5], [1, 7], [3, 7], [2, 2], [2, 6]],
+    null, null, null, [[2, 4]]
+  ];
   function cardHTML(c) {
-    return '<i class="r">' + C.RANK_CH[c >> 2] + '</i><i class="s">' + C.SUITS[c & 3] + '</i>';
+    const r = c >> 2, suit = C.SUITS[c & 3];
+    const idx = '<i class="r">' + C.RANK_CH[r] + '</i><i class="s">' + suit + '</i>';
+    if (r >= 9 && r <= 11) {
+      return idx + '<div class="pips court"><b>' + C.RANK_CH[r] + '</b>' +
+        '<i class="up">' + suit + '</i><i class="dn">' + suit + '</i></div>';
+    }
+    const lay = PIPS[r] || [];
+    return idx + '<div class="pips' + (r === 12 ? ' ace' : '') + '">' +
+      lay.map(([x, y]) => '<i style="--x:' + x + ';--y:' + y + '">' + suit + '</i>').join('') + '</div>';
   }
   function makeCardEl(c, cls) {
     const e = document.createElement('div');
@@ -628,7 +648,7 @@
     G.tLevel = o.level || 1; G.riseEvery = 8; G.finish = 0; G.finalShown = false;
     G.dealer = -1; G.lastRaiser = null;
     G.board = []; G.hl = null; G.turn = -1; G.over = false; G.acting = -1;
-    G.hp = { hands: 0, shoves: 0, raises: 0, calls: 0, folds: 0, faced: 0, foldFaced: 0 };
+    G.hp = { hands: 0, shoves: 0, raises: 0, calls: 0, folds: 0, faced: 0, foldFaced: 0, overbets: 0, bigBets: 0 };
 
     G.hero = {
       i: 0, id: 'hero', human: true, name: S.name || 'You', hue: 42, chips: o.chips,
@@ -760,7 +780,7 @@
     }
     const pot = potTotal();
     const potEl = $('#pot');
-    potEl.innerHTML = pot ? '<span>POT</span><b>' + fmt(pot) + '</b>' : '';
+    potEl.innerHTML = pot ? chipStackHTML(pot) + '<span>POT</span><b>' + fmt(pot) + '</b>' : '';
     if (pot > lastPot) {
       potEl.classList.remove('bump');
       void potEl.offsetWidth;
@@ -795,8 +815,40 @@
       const show = p.bet > 0 && !p.out && !G.over;
       el.classList.toggle('on', show);
       el.classList.toggle('allin', !!p.allin);
-      if (show) el.textContent = fmt(p.bet);
+      if (show) el.innerHTML = chipStackHTML(p.bet) + '<b>' + fmt(p.bet) + '</b>';
     });
+  }
+
+  // Chips you can see: a stack leaves the seat and lands in the pot.
+  function chipStackHTML(amt) {
+    let v = Math.max(1, Math.round(amt));
+    const units = [[1000, 'c1k'], [500, 'c500'], [100, 'c100'], [25, 'c25'], [5, 'c5'], [1, 'c1']];
+    const out = [];
+    for (let k = 0; k < units.length && out.length < 4; k++) {
+      if (v >= units[k][0]) { out.push(units[k][1]); v -= units[k][0]; }
+    }
+    if (!out.length) out.push('c1');
+    return '<span class="cstack">' + out.map((c, i) =>
+      '<i class="chipdisc ' + c + '" style="--i:' + i + '"></i>').join('') + '</span>';
+  }
+  function chipFlight(p, amt) {
+    const seat = seatEls[p.i], pot = $('#pot');
+    if (!seat || !pot || !amt) return;
+    const a = seat.getBoundingClientRect(), b = pot.getBoundingClientRect();
+    const el = document.createElement('div');
+    el.className = 'chipfly';
+    el.innerHTML = chipStackHTML(amt);
+    const x0 = a.left + a.width / 2, y0 = a.top + a.height * 0.34;
+    el.style.left = x0 + 'px';
+    el.style.top = y0 + 'px';
+    document.body.appendChild(el);
+    const dx = b.left + b.width / 2 - x0, dy = b.top + b.height / 2 - y0;
+    const anim = el.animate([
+      { transform: 'translate(-50%,-50%) scale(.7)', opacity: 0 },
+      { transform: 'translate(calc(-50% + ' + dx * 0.5 + 'px), calc(-50% + ' + (dy * 0.5 - 26) + 'px)) scale(1.1)', opacity: 1, offset: 0.55 },
+      { transform: 'translate(calc(-50% + ' + dx + 'px), calc(-50% + ' + dy + 'px)) scale(.75)', opacity: 0 }
+    ], { duration: 500, easing: 'cubic-bezier(.3,.8,.35,1)' });
+    anim.onfinish = () => el.remove();
   }
 
   function updateGoal() {
@@ -832,7 +884,7 @@
   }
   function botSay(p, kind) {
     if (!p.bot) return;
-    if (Math.random() > 0.35) return;
+    if (Math.random() > (p.bot.talk || 0.35)) return;
     p.said = B.chatFor(p.bot, kind, Math.random);
     p.saidKind = 'chat';
     setTimeout(() => { p.said = ''; p.saidKind = ''; render(); }, 2200);
@@ -992,7 +1044,9 @@
     return {
       maniac: clamp((h.shoves / hands - 0.1) * 2.4, 0, 1),
       foldsALot: h.faced >= 3 ? h.foldFaced / h.faced : 0.3,
-      callHappy: h.faced >= 3 ? h.calls / Math.max(1, h.calls + h.folds) : 0.5
+      callHappy: h.faced >= 3 ? h.calls / Math.max(1, h.calls + h.folds) : 0.5,
+      // The table remembers a hero who keeps blasting; the seats adjust.
+      overbets: clamp((h.overbets || 0) / 3, 0, 1)
     };
   }
   function botDecide(p) {
@@ -1021,6 +1075,7 @@
     if (a.type === 'call' || a.type === 'check') {
       const amt = Math.min(Math.max(0, G.cur - p.bet), p.chips);
       post(p, amt);
+      if (amt) chipFlight(p, amt);
       if (!p.allin) p.tag = amt === 0 ? 'Check' : 'Call ' + fmt(amt);
       if (amt === 0) sfx.check(); else sfx.chip();
       if (p.human) G.hp.calls++;
@@ -1035,13 +1090,17 @@
     }
     const opening = G.cur === 0;
     const raiseBy = to - G.cur;
-    post(p, to - p.bet);
+    const potBefore = potTotal();
+    const paid = Math.min(to, p.chips + p.bet) - p.bet;
+    post(p, paid);
+    if (paid) chipFlight(p, paid);
     if (raiseBy >= G.minRaise) G.minRaise = raiseBy;
     G.cur = to;
     if (!p.allin) p.tag = (opening ? 'Bet ' : 'Raise ') + fmt(G.cur);
     if (p.human) {
       const allinish = p.chips <= Math.max(G.sb, (p.bet) * 0.05) || p.allin;
       if (allinish) G.hp.shoves++; else G.hp.raises++;
+      if (raiseBy > potBefore * 0.8) G.hp.overbets++; else G.hp.bigBets++;
     }
     sfx.raise();
     return true;
@@ -1109,10 +1168,12 @@
 
   async function playHand() {
     const P = G.players;
+    churnLineup();
     P.forEach((p) => {
       p.out = p.chips <= 0;
       p.hole = []; p.bet = 0; p.total = 0; p.folded = p.out; p.allin = false;
       p.tag = ''; p.role = ''; p.reveal = false; p.win = false; p.said = ''; p.score = 0;
+      if (p.bot) { p.bot.mood = null; p.bot.plan = null; }
     });
     G.hand++;
     if (G.tournament) {
@@ -1310,6 +1371,30 @@
     } catch (e) {
       if (e !== ABORT) console.error(e);
     }
+  }
+
+  // A saloon table is a room people drift through. Every round brings new
+  // faces, new temperaments and new habits; tournaments keep their field.
+  function churnLineup() {
+    if (G.tournament || G.hand < 1) return;
+    const count = G.players.length - 1;
+    if (count < 1) return;
+    const swaps = Math.random() < 0.4 ? 2 : 1;
+    for (let s = 0; s < swaps; s++) {
+      const i = 1 + Math.floor(Math.random() * count);
+      const old = G.players[i];
+      const bot = B.makeRoster(1, G.skill)[0];
+      G.players[i] = makePlayerFromBot(bot, i, freshStack());
+      const el = seatEls[i];
+      if (el) {
+        const av = $('.avatar', el);
+        if (av) { av.dataset.portrait = ''; av.innerHTML = ''; }
+        el.classList.remove('win', 'fold', 'out', 'turn', 'acting');
+        seatBotInfo(el, G.players[i]);
+      }
+      toast(old.name + ' racks up \u2014 ' + bot.name + ' takes the seat');
+    }
+    render();
   }
 
   function rotateSeats() {
@@ -1557,7 +1642,7 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   window.__hld = {
-    G, S, career, startSession, MAPS, sfx, audio,
+    G, S, career, startSession, MAPS, sfx, audio, churnLineup,
     graph: () => ({ ac, master, comp })
   };
 })();
