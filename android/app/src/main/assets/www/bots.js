@@ -187,6 +187,26 @@
     }
   ];
 
+  // A persona is the part that actually changes how a seat plays. The
+  // archetype numbers above only set a starting point; these margins decide
+  // whether a player pays off, attacks, or gives up.
+  const PERSONA = {
+    solver:  { callMargin: 0.02, bluff: 1.0, raise: 1.0, size: 1.0, pace: 1.0 },
+    pro:     { callMargin: 0.01, bluff: 0.9, raise: 1.05, size: 1.0, pace: 1.0 },
+    nit:     { callMargin: 0.10, bluff: 0.2, raise: 0.8, size: 0.8, pace: 1.3 },
+    rock:    { callMargin: 0.13, bluff: 0.1, raise: 0.7, size: 0.85, pace: 1.4 },
+    station: { callMargin: -0.17, bluff: 0.25, raise: 0.5, size: 0.9, pace: 1.2 },
+    maniac:  { callMargin: -0.12, bluff: 2.3, raise: 2.0, size: 1.5, pace: 0.7 },
+    lag:     { callMargin: -0.03, bluff: 1.7, raise: 1.5, size: 1.2, pace: 0.85 },
+    bully:   { callMargin: 0.00, bluff: 1.9, raise: 1.4, size: 1.35, pace: 0.8 },
+    trapper: { callMargin: -0.05, bluff: 0.5, raise: 0.55, size: 0.9, pace: 1.15 },
+    gambler: { callMargin: -0.08, bluff: 1.4, raise: 1.2, size: 1.25, pace: 0.9 },
+    folder:  { callMargin: 0.08, bluff: 0.3, raise: 0.9, size: 0.9, pace: 1.1 },
+    wild:    { callMargin: 0.00, bluff: 1.1, raise: 1.0, size: 1.1, pace: 1.0 },
+    honest:  { callMargin: 0.02, bluff: 0.02, raise: 1.0, size: 1.0, pace: 1.25 },
+    bluffer: { callMargin: -0.03, bluff: 2.7, raise: 1.05, size: 1.4, pace: 0.75 }
+  };
+
   function strategyFor(a, r) {
     return {
       vpip: clamp(a.vpip + (r() - 0.5) * 0.09, 0.08, 0.82),
@@ -225,6 +245,16 @@
       skill: clamp(0.42 + band * 0.58 + (r() - 0.5) * 0.1, 0.3, 1),
       noise: clamp(0.12 - band * 0.075 + (r() - 0.5) * 0.03, 0.02, 0.15),
       chat: a.chat,
+      persona: (() => {
+        const base = PERSONA[a.id] || PERSONA.solver;
+        return {
+          callMargin: clamp(base.callMargin + (r() - 0.5) * 0.03, -0.24, 0.18),
+          bluff: base.bluff * (0.85 + r() * 0.3),
+          raise: base.raise * (0.85 + r() * 0.3),
+          size: base.size * (0.9 + r() * 0.2),
+          pace: base.pace * (0.92 + r() * 0.16)
+        };
+      })(),
       tells: {
         strong: pick(TELLS.strong, r), weak: pick(TELLS.weak, r), bluff: pick(TELLS.bluff, r)
       },
@@ -239,6 +269,7 @@
       memory: {}
     }, strategyFor(a, r));
     bot.sims = Math.round(110 + band * 190);
+    bot.pace = bot.persona.pace;
     bot.tilt = 0;
     return bot;
   }
@@ -405,6 +436,7 @@
     const loose = mood.loose;
     const skill = clamp(bot.skill, 0.3, 1);
     const stick = bot.callDown - 0.5;
+    const persona = bot.persona || PERSONA.solver;
 
     const raiseTo = (to) => {
       if (!canRaise) return { type: 'call' };
@@ -416,7 +448,7 @@
     };
     const potAfter = pot + toCall;
     const sizeTo = (frac) => {
-      const base = Math.max(bb, potAfter * frac * bot.sizing);
+      const base = Math.max(bb, potAfter * frac * bot.sizing * persona.size);
       return raiseTo(cur + base);
     };
     const roundBB = (v) => Math.max(minTo, Math.round(v / Math.max(1, sb)) * Math.max(1, sb));
@@ -467,7 +499,7 @@
         if (pos && canRaise && toCall <= sb * 2 && R() < clamp(bot.bluff * 2.2 * (0.6 + tableFold), 0, 0.42)) {
           return raiseTo(roundBB(bb * (2.4 + R() * 0.8)));
         }
-        return { type: 'call' };
+        return toCall > 0 ? { type: 'fold' } : { type: 'call' };
       }
 
       // Facing an open: 3-bet the top of the range, defend by price.
@@ -525,7 +557,7 @@
       }
       if (strong) {
         bot.plan = { kind: 'value', street };
-        const freq = 0.72 + aggr * 0.2;
+        const freq = clamp(0.72 + aggr * 0.2 * persona.raise, 0, 0.98);
         if (R() < freq) return sizeTo(boardScary ? 0.7 : 0.55);
         return { type: 'call' };
       }
@@ -543,9 +575,9 @@
         }
         return { type: 'call' };
       }
-      const bluff = clamp(bot.bluff * (0.8 + aggr * 0.9) * (1 + foldEq)
+      const bluff = clamp(bot.bluff * persona.bluff * (0.8 + aggr * 0.9) * (1 + foldEq)
         * (1 - stationHero * 0.6) * (street === 3 ? 0.8 : 1)
-        * (boardScary ? 1.1 : 0.9), 0.01, 0.55);
+        * (boardScary ? 1.1 : 0.9), 0.005, 0.9);
       if (R() < bluff || (barrel && R() < barrel)) {
         bot.plan = { kind: 'bluff', street };
         return sizeTo(R() < bot.overbet ? 1.3 : 0.7);
@@ -560,7 +592,7 @@
     // bots surrender routinely priced hands; a call now needs equity above the
     // real pot odds, not above them plus a premium.
     const need = potOdds + 0.01 - implied - stick * 0.04 - maniac * 0.05
-      - bluffCatch + (1 - skill) * 0.015;
+      - bluffCatch + (1 - skill) * 0.015 + persona.callMargin;
 
     if (toCall >= myChips * 0.75) {
       const shoveNeed = need + 0.01 - maniac * 0.05 - stick * 0.02;
@@ -572,12 +604,12 @@
 
     if (monster) {
       bot.plan = { kind: 'value', street };
-      if (canRaise && R() < 0.22 + bot.trap * 0.35) return sizeTo(1.0);
+      if (canRaise && R() < (0.22 + bot.trap * 0.35) * persona.raise) return sizeTo(1.0);
       return { type: 'call' };
     }
     if (strong) {
       bot.plan = { kind: 'value', street };
-      if (canRaise && R() < aggr * 0.5) return sizeTo(0.9);
+      if (canRaise && R() < clamp(aggr * 0.5 * persona.raise, 0, 0.95)) return sizeTo(0.9);
       return { type: 'call' };
     }
     if (callEq > need + 0.02) {

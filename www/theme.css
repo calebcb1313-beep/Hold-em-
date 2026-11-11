@@ -1,0 +1,160 @@
+/* ============================================================
+   ILLUSTRATED THEME
+   Drawn table, room, portraits and display type on top of the
+   saloon skin. Loaded last.
+   ============================================================ */
+@font-face{font-family:"Rye Local";src:url("Rye-Regular.ttf") format("truetype");font-display:swap}
+@font-face{font-family:"Cinzel Dec Local";src:url("CinzelDecorative-Bold.ttf") format("truetype");font-display:swap}
+
+:root{
+  --brand:"Rye Local","Cinzel Local",Georgia,serif;
+  --ornate:"Cinzel Dec Local","Cinzel Local",Georgia,serif;
+}
+
+/* ---------------- menu: painted room ---------------- */
+.menu-bg{background:#150d07 url("art/room.svg") center top/cover no-repeat}
+.menu-bg:before{background:
+  radial-gradient(ellipse 60% 40% at 50% 4%,rgba(255,205,130,.16),transparent 62%),
+  linear-gradient(180deg,rgba(0,0,0,.25),rgba(0,0,0,.55) 62%,rgba(0,0,0,.86))}
+.menu-bg:after{background:radial-gradient(ellipse 74% 56% at 50% 30%,transparent 40%,rgba(0,0,0,.55) 100%)}
+.poster{display:none}
+.lamp{display:none}
+.shelf{display:none}
+
+.logo h1{font-family:var(--brand);font-weight:400;letter-spacing:.03em;
+  background:linear-gradient(180deg,#fff6dd 6%,#f0cd8a 38%,#c99a4e 68%,#8d6428 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.6)) drop-shadow(0 12px 22px rgba(0,0,0,.6))}
+.logo h1 span{font-size:.86em}
+.logo-card{border-radius:2px;border:1px solid #4e3a22;
+  background:linear-gradient(160deg,#f7edd6,#e6d5b0 62%,#cbb387);
+  box-shadow:2px 3px 0 rgba(0,0,0,.5),inset 0 0 0 2px rgba(255,255,255,.28)}
+.rule span{font-family:var(--ornate);font-size:8px;letter-spacing:.26em;color:#b08d59}
+
+.level-card{background:
+    linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,0) 40%),
+    linear-gradient(180deg,#f3e6c8,#dfcba2 74%,#d2ba8d);
+  border:1px solid #6b5232;border-radius:2px;
+  box-shadow:0 3px 0 #140d07,0 16px 30px -20px #000,inset 0 0 44px rgba(120,88,40,.16)}
+.level-top{font-family:var(--ornate);font-size:9px;letter-spacing:.16em}
+.level-bottom{font-family:var(--display);font-size:10px;letter-spacing:.04em}
+
+.btn{font-family:var(--ornate);font-weight:700;letter-spacing:.1em;font-size:12px}
+.btn.primary{background:
+  linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,0) 34%),
+  linear-gradient(180deg,#f7dc9f,#e0b26a 58%,#bb8639);
+  border-color:#8a6430;color:#2c1d06;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),inset 0 -3px 0 rgba(110,70,20,.35),
+    0 4px 0 #1d1208,0 18px 30px -16px rgba(0,0,0,.95)}
+.play-btn{height:76px}
+.pb-main b{font-family:var(--brand);font-weight:400;letter-spacing:.05em;text-transform:none;font-size:26px}
+.pb-main small{font-family:var(--sans)}
+.btn.glass{font-family:var(--ornate);letter-spacing:.08em}
+
+/* ---------------- drawn table ---------------- */
+#table{background:#0e0906 url("art/room.svg") center/cover no-repeat}
+#table:before{background:
+  radial-gradient(ellipse 70% 42% at 50% -4%,rgba(255,205,132,.2),transparent 62%),
+  radial-gradient(ellipse 90% 80% at 50% 50%,transparent 52%,rgba(0,0,0,.45) 100%)}
+#table:after{display:none}
+#rail{display:none}
+#felt{inset:2.5% .5% 7.5%;border-radius:0;background:url("art/mat.svg") center/100% 100% no-repeat;
+  box-shadow:none}
+#felt:before,#felt:after{display:none}
+.felt-mark{display:none}
+#tablewrap{filter:drop-shadow(0 40px 50px rgba(0,0,0,.65))}
+.table-lamp:before{background:linear-gradient(180deg,#7a5430,#3f2814 70%,#22140a);
+  box-shadow:inset 0 2px 0 rgba(255,220,160,.3),0 10px 18px rgba(0,0,0,.6)}
+.sconce{box-shadow:0 0 40px 14px rgba(255,190,110,.18),inset 0 0 8px rgba(255,220,160,.5)}
+
+#center{top:45%}
+#pot:not(:empty){background:
+  linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,0) 46%),
+  linear-gradient(180deg,#4f3922,#291b0f);
+  border:1px solid #b98b48;border-radius:3px;
+  box-shadow:0 3px 0 #120b06,0 10px 22px -12px #000,inset 0 1px 0 rgba(255,230,180,.28)}
+#pot b{font-family:var(--ornate);letter-spacing:.05em}
+
+/* portraits and plaques */
+.plate{background:
+  linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,0) 42%),
+  linear-gradient(180deg,#3f2c1a,#241710);
+  border:1px solid #6b4e2c;border-radius:2px;padding:4px 12px 4px 4px;
+  box-shadow:0 2px 0 #100a05,inset 0 1px 0 rgba(255,225,170,.22),inset 0 -8px 14px rgba(0,0,0,.4)}
+.plate:after{content:"";position:absolute;inset:2px;border:1px solid rgba(240,217,164,.12);
+  border-radius:inherit;pointer-events:none}
+.nm{font-family:var(--ornate);font-size:10.5px;letter-spacing:.06em;color:#f4e3bd}
+.ch{font-family:var(--sans);color:#c9b184}
+.avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;background:#1a1109;
+  box-shadow:0 0 0 2px #c9a15c,0 0 0 3px #1a1109,0 4px 10px rgba(0,0,0,.6)}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar span{display:none}
+.seat.hero .avatar{width:40px;height:40px}
+.seat.hero .avatar span{display:grid;place-items:center;font-size:12px}
+.seat.win .plate{background:
+  linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,0) 40%),
+  linear-gradient(180deg,#f7e3b2,#d9ae64);color:#2a1c07}
+.seat.win .nm{color:#2a1c07}
+.seat.turn .plate{border-color:#e6c98f;
+  box-shadow:0 0 0 1px #e6c98f,0 0 30px -4px rgba(255,205,132,.7),0 2px 0 #100a05}
+
+.tag{background:rgba(12,7,3,.8);border:1px solid rgba(240,217,164,.26);border-radius:2px;
+  font-family:var(--ornate);font-size:8.5px;letter-spacing:.12em}
+.read{font-family:var(--ornate);font-size:7.5px;letter-spacing:.12em}
+.say{font-family:var(--sans);border-radius:2px 4px 2px 4px;box-shadow:2px 4px 0 rgba(0,0,0,.45)}
+.say.tell{font-family:var(--serif);font-style:italic}
+
+/* cards: paper, inner rule, engraved indices */
+.card{background:
+  linear-gradient(160deg,rgba(255,255,255,.6),rgba(255,255,255,0) 36%),
+  linear-gradient(160deg,#fbf2dd 0%,#f2e3c4 60%,#e3ceA7 100%);
+  border:1px solid rgba(70,50,26,.5);border-radius:3px;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 3px 0 -1px rgba(90,64,34,.4),
+    0 8px 14px -8px rgba(0,0,0,.8)}
+.card:after{content:"";position:absolute;inset:5%;border:1px solid rgba(120,90,50,.16);
+  border-radius:2px;pointer-events:none}
+.card.back{background:
+  repeating-linear-gradient(45deg,rgba(240,217,164,.09) 0 2px,transparent 2px 9px),
+  repeating-linear-gradient(-45deg,rgba(240,217,164,.09) 0 2px,transparent 2px 9px),
+  radial-gradient(ellipse at 50% 40%,#8a333c,#571a22 62%,#320b10)}
+.card.back:after{inset:7%;border:1px solid rgba(240,217,164,.5)}
+.card .r{font-family:var(--serif);font-weight:700}
+.card .s{opacity:.92}
+
+/* action rail: carved wood with brass hardware */
+#actions{background:
+  linear-gradient(180deg,rgba(20,12,7,0),rgba(28,18,10,.94) 34%,#150d07);
+  border-top:1px solid rgba(240,217,164,.14);
+  box-shadow:0 -14px 30px -18px #000}
+#hint{font-family:var(--ornate);font-size:9.5px;letter-spacing:.1em}
+.act{font-family:var(--ornate);font-size:11.5px;letter-spacing:.12em;height:56px;border-radius:2px;
+  border:1px solid #6d5331;box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 0 #100a05}
+.act.fold{background:
+  linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,0) 44%),
+  linear-gradient(180deg,#5a2a24,#33120f);color:#efb6a8;border-color:#7a3a30}
+.act.call{background:
+  linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,0) 44%),
+  linear-gradient(180deg,#45301f,#251708);color:#f2e2bd;border-color:#6b4e2c}
+.act.raise{background:
+  linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 40%),
+  linear-gradient(180deg,#f6dc9e,#ddb066 58%,#b88134);color:#2b1c06;border-color:#8a6430}
+
+/* paper pages with ornament corners */
+.panel,.sheet{position:relative}
+.panel:before,.sheet:before{content:"";position:absolute;inset:6px;pointer-events:none;
+  border:1px solid rgba(120,90,50,.22);border-radius:1px}
+.panel h3,.sheet h2{font-family:var(--ornate);letter-spacing:.02em}
+.bar h2{font-family:var(--ornate);letter-spacing:.16em;font-size:12px}
+.map-name{font-family:var(--ornate);font-size:15px}
+.toast{font-family:var(--ornate);letter-spacing:.06em;border-radius:2px}
+
+/* logos and headings on other screens */
+#menu .logo h1{line-height:.94}
+
+@media (max-width:520px){
+  #felt{inset:2% 0 6.5%}
+  .avatar{width:31px;height:31px}
+  .nm{font-size:9.5px}
+  .act{font-size:10.5px;letter-spacing:.06em;height:52px}
+  .panel:before,.sheet:before{inset:4px}
+}

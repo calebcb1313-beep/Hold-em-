@@ -709,8 +709,13 @@
   function seatBotInfo(el, p) {
     if (!p.bot) return;
     const av = $('.avatar', el);
-    av.style.background = 'linear-gradient(145deg,hsl(' + p.hue + ' 46% 46%),hsl(' + ((p.hue + 40) % 360) + ' 52% 26%))';
-    $('.avatar span', el).textContent = (p.name || '?').replace(/[^A-Za-z0-9]/g, '').charAt(0).toUpperCase();
+    if (!av.dataset.portrait) {
+      let h = 0;
+      for (let k = 0; k < p.name.length; k++) h = (h * 31 + p.name.charCodeAt(k)) % 997;
+      const n = 1 + (h % 6);
+      av.dataset.portrait = 'art/portrait-' + n + '.svg';
+      av.innerHTML = '<img alt="" src="' + av.dataset.portrait + '">';
+    }
     $('.nm', el).textContent = p.name;
     $('.read', el).textContent = p.bot ? B.readLive(p.bot) : '';
   }
@@ -1065,7 +1070,7 @@
         a = await askHuman(p);
         if (toCall > 0 && a.type === 'fold') G.hp.foldFaced++;
       } else {
-        await sleep(delay() * (0.55 + Math.random() * 0.8));
+        await sleep(delay() * (0.55 + Math.random() * 0.8) * (p.bot.pace || 1));
         a = botDecide(p);
         p.bot.seen++;
         p.bot.hands++;
