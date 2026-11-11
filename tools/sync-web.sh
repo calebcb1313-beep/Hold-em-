@@ -7,6 +7,7 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 cp www/*.html www/*.css www/*.js www/*.svg www/*.png www/*.ttf www/*.webmanifest "$DEST"/
 cp -r www/art "$DEST"/
+rm -f "$DEST"/_*.html
 # The service worker only works over http(s); the APK loads from file://.
 rm -f "$DEST/sw.js"
 echo "synced web assets -> $DEST ($(ls -1 "$DEST" | wc -l) files)"

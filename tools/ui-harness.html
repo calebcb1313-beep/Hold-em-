@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hold'em Royale UI tests</title>
+<style>
+  html,body{margin:0;background:#1a110a;color:#f6e6c6;font:13px/1.45 monospace}
+  #wrap{display:flex;gap:16px;padding:14px}
+  iframe{width:390px;height:760px;border:1px solid #5e4327;background:#000;flex:none}
+  pre{white-space:pre-wrap;max-width:640px;font:12px/1.45 monospace;color:#cfe8d7}
+  .pass{color:#7ee2a8}.fail{color:#ff9b8f}
+</style></head>
+<body>
+<div id="wrap">
+  <iframe id="app" src="index.html?uitest=37" title="game under test"></iframe>
+  <pre id="out" data-result="RUNNING">RUNNING</pre>
+</div>
+<script>
+(() => {
+  const out = document.getElementById('out');
+  const app = document.getElementById('app');
+  const results = [];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const check = (ok, name, detail) => {
+    results.push({ ok: !!ok, name, detail: detail || '' });
+    if (!ok) throw new Error(name + (detail ? ' :: ' + detail : ''));
+  };
+  const waitFor = async (fn, ms, label) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) {
+      try { if (fn()) return; } catch (e) {}
+      await sleep(60);
+    }
+    throw new Error('timeout: ' + label);
+  };
+  const run = async () => {
+    await waitFor(() => app.contentWindow && app.contentWindow.__hld &&
+      app.contentWindow.ReplayUI, 15000, 'game boot');
+    const w = app.contentWindow, d = app.contentDocument, h = w.__hld;
+    check(w.innerWidth === 390, 'phone viewport is 390px', 'got ' + w.innerWidth);
+    h.S.speed = 'fast'; h.S.sound = false;
+    h.startSession({ mode: 'quick', buyin: 2000, target: 999999, chips: 2000,
+      seats: 4, bb: 20, skill: 0.4, mapIndex: 0, seed: 12345 });
+    await waitFor(() => h.G.pending && h.G.acting === 0, 15000, 'hero turn');
+    const T = h.G.engine;
+    const legal = T.legalActions(0);
+    check(legal && legal.raise, 'hero has a legal raise');
+    d.querySelector('#aRaise').click();
+    await sleep(120);
+    const panel = d.querySelector('#raisePanel');
+    const sl = d.querySelector('#rSlider');
+    check(!panel.hidden, 'raise panel opens');
+    check(+sl.min === legal.raise.min && +sl.max === legal.raise.max,
+      'slider bounds match engine', sl.min + '-' + sl.max + ' vs ' +
+      legal.raise.min + '-' + legal.raise.max);
+    const quick = Array.from(d.querySelectorAll('#rQuick button')).map((b) => b.textContent);
+    check(quick.some((x) => x.toLowerCase().includes('pot')) && quick.some((x) => x.toLowerCase().includes('all-in')),
+      'bet presets include pot and all-in', quick.join(', '));
+    d.querySelector('#rCancel').click();
+    d.querySelector('#aFold').click();
+    await waitFor(() => h.G.over && !d.querySelector('#nextBtn').hidden, 20000, 'hand finish');
+    check(!!localStorage.getItem('hlx_replays'), 'hand was recorded');
+
+    // Reconstruct a deterministic multi-way all-in side-pot hand.
+    const E = w.Engine;
+    const players = [
+      { id: 'a', name: 'A', stack: 100 }, { id: 'b', name: 'B', stack: 200 },
+      { id: 'c', name: 'C', stack: 10 }, { id: 'd', name: 'D', stack: 1000 }
+    ];
+    const side = new E.Table({ sb: 5, bb: 10, button: 0, seed: 777,
+      players: players.map((p) => ({ id: p.id, name: p.name, stack: p.stack })) });
+    side.startHand(777);
+    const actions = [
+      { seat: 3, action: { type: 'raise', to: 300 } },
+      { seat: 0, action: { type: 'call' } },
+      { seat: 1, action: { type: 'call' } }
+    ];
+    actions.forEach((x) => side.act(x.seat, x.action));
+    check(side.result && side.result.showdown, 'side-pot hand reaches showdown');
+    check(side.result.pots.length >= 3, 'side-pot hand has multiple pots',
+      String(side.result.pots.length));
+    const rec = { hand: 99, handSeed: 777, sb: 5, bb: 10, button: 0,
+      players: players.map((p) => ({ id: p.id, name: p.name, stack: p.stack })),
+      actions: actions, map: 'UI test', result: side.result };
+    w.ReplayUI.open(rec);
+    await sleep(120);
+    const sh = d.querySelector('#sheet');
+    check(d.querySelector('#modal').classList.contains('on'), 'replay modal opens');
+    check(sh.querySelectorAll('#rpBoard .card').length === 5, 'replay board has five slots');
+    check(sh.querySelectorAll('.rp-player').length === 4, 'replay shows four seats');
+    check(sh.querySelectorAll('.rp-act').length === 3, 'replay log has every action');
+    const next = sh.querySelector('#rpNext');
+    for (let i = 0; i < actions.length; i++) next.click();
+    await sleep(60);
+    check(sh.querySelectorAll('#rpBoard .card:not(.empty)').length === 5,
+      'final replay state reveals the board');
+    check(!!sh.querySelector('.rp-winners'), 'winner summary is shown');
+    check(!!sh.querySelector('.rp-pots'), 'side pots are shown');
+    const step = sh.querySelector('#rpStep').textContent;
+    check(/Step 3 \/ 3/.test(step), 'replay reaches the final step', step);
+    w.ReplayUI.openList();
+    await sleep(80);
+    check(!!d.querySelector('.rp-row'), 'recorded hand appears in replay list');
+    out.className = 'pass';
+    out.dataset.result = 'PASS';
+    out.textContent = 'UI TEST PASS\n' + results.map((r) => 'PASS ' + r.name +
+      (r.detail ? ' (' + r.detail + ')' : '')).join('\n');
+  };
+  run().catch((e) => {
+    out.className = 'fail';
+    out.dataset.result = 'FAIL';
+    out.textContent = 'UI TEST FAIL\n' + results.map((r) => (r.ok ? 'PASS ' : 'FAIL ') + r.name +
+      (r.detail ? ' (' + r.detail + ')' : '')).join('\n') + '\n' + (e.stack || e);
+  });
+})();
+</script>
+</body></html>

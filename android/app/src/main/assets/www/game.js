@@ -606,7 +606,8 @@
     over: false, mode: 'career', mapIndex: 0, map: MAPS[0], buyin: 1000, target: 2000,
     skill: 0.3, seats: 4, acting: -1, hp: null,
     tournament: false, entry: 0, prize: 0, tLevel: 1, riseEvery: 8,
-    finish: 0, finalShown: false, lastRaiser: null
+    finish: 0, finalShown: false, lastRaiser: null,
+    engine: null, seed: 0, showPot: 0, replay: null
   };
   const LAYOUT_WIDE = {
     2: [[50, 82], [50, 17]],
@@ -661,8 +662,14 @@
     G.mode = o.mode || 'career';
     G.mapIndex = o.mapIndex || 0;
     G.map = MAPS[G.mapIndex] || MAPS[0];
-    G.buyin = o.buyin; G.target = o.target; G.skill = o.skill; G.seats = o.seats;
-    G.bb = o.bb; G.sb = Math.floor(o.bb / 2);
+    G.buyin = o.buyin || 1000;
+    G.target = o.target || G.buyin * 2;
+    G.skill = o.skill; G.seats = o.seats;
+    G.bb = o.bb || 20; G.sb = Math.floor(G.bb / 2);
+    G.engine = null;
+    G.showPot = 0;
+    G.replay = null;
+    G.seed = o.seed != null ? (o.seed >>> 0) : ((Date.now() ^ (G.sid * 2654435761)) >>> 0);
     G.hand = o.hand || 0;
     G.tournament = o.mode === 'tournament';
     G.entry = o.entry || 0; G.prize = o.prize || 0;
@@ -672,7 +679,8 @@
     G.hp = { hands: 0, shoves: 0, raises: 0, calls: 0, folds: 0, faced: 0, foldFaced: 0, overbets: 0, bigBets: 0 };
 
     G.hero = {
-      i: 0, id: 'hero', human: true, name: S.name || 'You', hue: 42, chips: o.chips,
+      i: 0, id: 'hero', human: true, name: S.name || 'You', hue: 42,
+      chips: o.chips != null ? o.chips : G.buyin,
       hole: [], bet: 0, total: 0, folded: false, allin: false, out: false,
       tag: '', role: '', reveal: false, win: false, said: '', score: 0
     };
@@ -691,6 +699,14 @@
     render();
     saveSession();
     runSession();
+  }
+
+  function saveReplay(rec) {
+    try {
+      const list = store.get('replays', []);
+      list.unshift(rec);
+      store.set('replays', list.slice(0, 12));
+    } catch (e) {}
   }
 
   function saveSession() {
@@ -802,7 +818,7 @@
       ce.classList.toggle('dim', !!(G.hl && has && !G.hl.has(G.board[k])));
       ce.classList.toggle('hl', !!(G.hl && has && G.hl.has(G.board[k])));
     }
-    const pot = potTotal();
+    const pot = G.showPot != null ? G.showPot : potTotal();
     const potEl = $('#pot');
     potEl.innerHTML = pot ? chipStackHTML(pot) + '<span>POT</span><b>' + fmt(pot) + '</b>' : '';
     if (pot > lastPot) {
@@ -1037,21 +1053,137 @@
     }
     return i;
   };
-  function post(p, amt) {
-    const a = Math.min(amt, p.chips);
-    p.chips -= a; p.bet += a; p.total += a;
-    if (p.chips === 0) { p.allin = true; p.tag = 'ALL-IN'; }
-  }
   const ordinal = (n) => n + (n % 10 === 1 && n % 100 !== 11 ? 'st'
     : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th');
 
+  /* ================= engine-backed hand flow ================= */
+  // The UI never decides what is legal. Human buttons and bot choices both
+  // come from Engine.Table.legalActions(), and Table.act() throws on anything
+  // else. Stacks, side pots and odd chips are settled by the tested engine.
+  function syncEngine(T, boardLimit) {
+    G.players.forEach((p, i) => {
+      const ep = T.players[i];
+      if (!ep) return;
+      p.chips = ep.stack;
+      p.bet = ep.bet;
+      p.total = ep.total;
+      p.hole = ep.hole.slice();
+      p.folded = ep.folded;
+      p.allin = ep.allin;
+      if (ep.stack > 0) p.out = false;
+    });
+    G.board = T.board.slice(0, boardLimit == null ? T.board.length : boardLimit);
+    G.cur = T.currentBet;
+    G.minRaise = T.minRaise;
+    G.dealer = T.button;
+    G.turn = T.acting;
+    G.acting = T.acting;
+    G.over = !!T.result;
+  }
+
+  function ensureEngine() {
+    const P = G.players;
+    if (!window.Engine) throw new Error('Rules engine failed to load');
+    if (!G.engine) {
+      G.engine = new Engine.Table({
+        sb: G.sb, bb: G.bb, button: 0, seed: G.seed,
+        players: P.map((p) => ({ id: p.id, name: p.name, stack: Math.max(0, p.chips) }))
+      });
+    } else {
+      const T = G.engine;
+      T.sb = G.sb; T.bb = G.bb;
+      T.players.forEach((ep, i) => {
+        const p = P[i];
+        if (!p) return;
+        ep.id = p.id; ep.name = p.name;
+        ep.stack = Math.max(0, p.chips);
+      });
+    }
+    const T = G.engine;
+    // New faces (or a rebuy seat) change the table total; adopt it before the
+    // deal so the engine's conservation check compares like with like.
+    T.totalChips = T.chipTotal();
+    return T;
+  }
+
+  // Bots think in a richer world than the legal-action object, so every bot
+  // choice is filtered through the engine's offer before it is submitted.
+  function legalize(a, legal) {
+    if (!a || !a.type) a = { type: legal.check ? 'check' : 'call' };
+    if (a.type === 'raise' || a.type === 'bet') {
+      if (!legal.raise) return { type: legal.check ? 'check' : 'call' };
+      let to = Math.round(Number(a.to));
+      if (!isFinite(to)) to = legal.raise.min;
+      to = clamp(to, legal.raise.min, legal.raise.max);
+      return { type: 'raise', to };
+    }
+    if (a.type === 'fold') return { type: 'fold' };
+    return { type: legal.check ? 'check' : 'call' };
+  }
+
+  function askHuman(p, legal) {
+    return new Promise((resolve) => {
+      const callBtn = $('#aCall'), raiseBtn = $('#aRaise');
+      const toCall = legal.callAmount;
+      callBtn.innerHTML = legal.check ? 'Check'
+        : toCall >= p.chips ? 'All-in ' + fmt(toCall) : 'Call ' + fmt(toCall);
+      raiseBtn.textContent = G.cur <= 0 ? 'Bet' : 'Raise';
+      raiseBtn.style.display = legal.raise ? '' : 'none';
+      G.pending = { resolve };
+      const done = (a) => { G.pending = null; setMode('wait'); resolve(a); };
+      $('#aFold').onclick = () => { sfx.fold(); done({ type: 'fold' }); };
+      callBtn.onclick = () => done({ type: legal.check ? 'check' : 'call' });
+      raiseBtn.onclick = () => openRaise(p, legal, done);
+      setMode('turn');
+      updateHint();
+      sfx.turn(); buzz(25);
+      status('');
+    });
+  }
+
+  function openRaise(p, legal, done) {
+    const minTo = legal.raise.min, maxTo = legal.raise.max;
+    const sl = $('#rSlider');
+    let v = minTo;
+    const word = G.cur <= 0 ? 'Bet' : 'Raise to';
+    sl.min = minTo; sl.max = maxTo; sl.step = 1;
+    $('#rLabel').textContent = word;
+    const upd = () => {
+      v = clamp(Math.round(v), minTo, maxTo);
+      sl.value = v;
+      $('#rAmt').textContent = fmt(v);
+      $('#rConfirm').textContent = v >= maxTo ? 'All-in ' + fmt(v) : word + ' ' + fmt(v);
+    };
+    const base = G.cur, pot = legal.pot, toCall = legal.toCall;
+    const sized = (f) => base + f * (pot + toCall);
+    const rnd = (x) => clamp(Math.round(x / G.sb) * G.sb, minTo, maxTo);
+    const q = $('#rQuick'); q.innerHTML = '';
+    [['Min', minTo], ['\u00BD pot', rnd(sized(0.5))], ['Pot', rnd(sized(1))], ['All-in', maxTo]]
+      .forEach(([label, val]) => {
+        const b = document.createElement('button');
+        b.className = 'q'; b.textContent = label;
+        b.onclick = () => { v = val; upd(); sfx.chip(); };
+        q.appendChild(b);
+      });
+    sl.oninput = () => { v = +sl.value; upd(); };
+    $('#rMinus').onclick = () => { v -= G.bb; upd(); };
+    $('#rPlus').onclick = () => { v += G.bb; upd(); };
+    $('#rCancel').onclick = () => { setMode('turn'); updateHint(); };
+    $('#rConfirm').onclick = () => {
+      if (v >= maxTo) sfx.allin();
+      done({ type: 'raise', to: v });
+    };
+    upd();
+    setMode('raise');
+  }
+
   // Bots watch every action and keep their own book on each opponent.
-  function observeAction(p, a, faced) {
-    const info = { pre: G.board.length === 0, type: a.type, faced };
+  function observeAction(p, a, faced, pre) {
+    const info = { pre: !!pre, type: a.type, faced: !!faced };
     G.players.forEach((q) => {
       if (!q.human && q !== p && q.bot) B.noteAction(q.bot, p.id, info);
     });
-    if (a.type === 'raise') G.lastRaiser = p;
+    if (a.type === 'raise' || a.type === 'bet') G.lastRaiser = p;
   }
   function noteShowdowns() {
     G.players.forEach((p) => {
@@ -1070,126 +1202,38 @@
       maniac: clamp((h.shoves / hands - 0.1) * 2.4, 0, 1),
       foldsALot: h.faced >= 3 ? h.foldFaced / h.faced : 0.3,
       callHappy: h.faced >= 3 ? h.calls / Math.max(1, h.calls + h.folds) : 0.5,
-      // The table remembers a hero who keeps blasting; the seats adjust.
       overbets: clamp((h.overbets || 0) / 3, 0, 1)
     };
   }
-  function botDecide(p) {
+
+  function botDecide(p, legal) {
     const P = G.players;
     const others = P.filter((q) => q !== p && alive(q)).length;
     const street = G.board.length === 0 ? 0 : G.board.length === 3 ? 1 : G.board.length === 4 ? 2 : 3;
     const n = P.length;
     const rel = ((p.i - G.dealer) % n + n) % n;
     const ctx = {
-      hole: p.hole, board: G.board, pot: potTotal(), toCall: Math.max(0, G.cur - p.bet),
+      hole: p.hole, board: G.board, pot: legal.pot, toCall: legal.toCall,
       cur: G.cur, minRaise: G.minRaise, myBet: p.bet, myChips: p.chips,
       nOpp: Math.max(1, others), bb: G.bb, sb: G.sb, street,
       late: rel >= n - 3, nPlayers: n, heroProfile: heroProfile(), rng: Math.random,
+      legal,
       reads: B.readsFor(p.bot, P.filter((q) => q !== p && alive(q)).map((q) => q.id),
         G.lastRaiser && G.lastRaiser !== p ? G.lastRaiser.id : null)
     };
     return B.decide(p.bot, ctx);
   }
-  function applyAction(p, a) {
-    if (!a) a = { type: 'fold' };
-    if (a.type === 'fold') {
-      p.folded = true; p.tag = 'Fold';
-      if (p.human) G.hp.folds++;
-      return false;
-    }
-    if (a.type === 'call' || a.type === 'check') {
-      const amt = Math.min(Math.max(0, G.cur - p.bet), p.chips);
-      post(p, amt);
-      if (amt) chipFlight(p, amt);
-      if (!p.allin) p.tag = amt === 0 ? 'Check' : 'Call ' + fmt(amt);
-      if (amt === 0) sfx.check(); else sfx.chip();
-      if (p.human) G.hp.calls++;
-      return false;
-    }
-    let to = Math.min(a.to, p.chips + p.bet);
-    if (to <= G.cur) {
-      const amt = Math.max(0, G.cur - p.bet);
-      post(p, Math.min(amt, p.chips));
-      if (!p.allin) p.tag = amt === 0 ? 'Check' : 'Call';
-      return false;
-    }
-    const opening = G.cur === 0;
-    const raiseBy = to - G.cur;
-    const potBefore = potTotal();
-    const paid = Math.min(to, p.chips + p.bet) - p.bet;
-    post(p, paid);
-    if (paid) chipFlight(p, paid);
-    if (raiseBy >= G.minRaise) G.minRaise = raiseBy;
-    G.cur = to;
-    if (!p.allin) p.tag = (opening ? 'Bet ' : 'Raise ') + fmt(G.cur);
-    if (p.human) {
-      const allinish = p.chips <= Math.max(G.sb, (p.bet) * 0.05) || p.allin;
-      if (allinish) G.hp.shoves++; else G.hp.raises++;
-      if (raiseBy > potBefore * 0.8) G.hp.overbets++; else G.hp.bigBets++;
-    }
-    sfx.raise();
-    return true;
-  }
 
-  async function betRound(first) {
-    const P = G.players;
-    G.lastRaiser = null;
-    G.cur = Math.max(0, ...P.map((p) => p.bet));
-    const pending = new Set(P.filter(canAct).map((p) => p.i));
-    let i = first, guard = 0;
-    while (pending.size && guard++ < 400) {
-      if (P.filter(alive).length <= 1) break;
-      const p = P[i];
-      if (!pending.has(i)) { i = (i + 1) % P.length; continue; }
-      if (!canAct(p)) { pending.delete(i); i = (i + 1) % P.length; continue; }
-      const others = P.filter((q) => q !== p && canAct(q)).length;
-      if (p.bet >= G.cur && others === 0) { pending.delete(i); i = (i + 1) % P.length; continue; }
-      G.turn = i;
-      if (!p.human) G.acting = i;
-      render();
-      let a;
-      if (p.human) {
-        const toCall = Math.max(0, G.cur - p.bet);
-        if (toCall > 0) G.hp.faced++;
-        a = await askHuman(p);
-        if (toCall > 0 && a.type === 'fold') G.hp.foldFaced++;
-      } else {
-        await sleep(delay() * (0.55 + Math.random() * 0.8) * (p.bot.pace || 1));
-        a = botDecide(p);
-        p.bot.seen++;
-        p.bot.hands++;
-        if (G.board.length === 0) {
-          p.bot.preDecisions++;
-          if (a.type === 'raise') p.bot.pfrCount++;
-          if (a.type !== 'fold') p.bot.vpipCount++;
-        } else {
-          p.bot.postDecisions++;
-          if (a.type === 'raise') p.bot.aggrCount++;
-        }
-        botTell(p, a);
-        if (a.type === 'fold' && Math.random() < 0.25) botSay(p, 'fold');
-        else if (a.type === 'raise' && Math.random() < 0.3) botSay(p, 'raise');
-        else if (a.type === 'call' && toCallNoRaise(p) && Math.random() < 0.2) botSay(p, 'call');
-      }
-      G.turn = -1; G.acting = -1;
-      const facedBet = Math.max(0, G.cur - p.bet) > 0;
-      const raised = applyAction(p, a);
-      observeAction(p, a, facedBet);
-      pending.delete(i);
-      if (raised) P.forEach((q) => { if (q !== p && canAct(q)) pending.add(q.i); });
-      render();
-      status('');
-      if (!p.human) await sleep(Math.min(260, delay() * 0.3));
-      i = (i + 1) % P.length;
+  function recordHuman(p, a, legal, beforeCur) {
+    if (!p.human) return;
+    if (a.type === 'fold') { G.hp.folds++; return; }
+    if (a.type === 'call' || a.type === 'check') { G.hp.calls++; return; }
+    if (a.type === 'raise') {
+      const allin = a.to >= legal.maxRaiseTo;
+      if (allin) G.hp.shoves++; else G.hp.raises++;
+      if (a.to - beforeCur > legal.pot * 0.8) G.hp.overbets++; else G.hp.bigBets++;
     }
-    P.forEach((p) => {
-      p.bet = 0;
-      if (p.tag !== 'Fold' && p.tag !== 'ALL-IN') p.tag = '';
-    });
-    G.cur = 0; G.minRaise = G.bb;
-    render();
   }
-  function toCallNoRaise(p) { return Math.max(0, G.cur - p.bet) === 0; }
 
   async function playHand() {
     const P = G.players;
@@ -1198,7 +1242,7 @@
       p.out = p.chips <= 0;
       p.hole = []; p.bet = 0; p.total = 0; p.folded = p.out; p.allin = false;
       p.tag = ''; p.role = ''; p.reveal = false; p.win = false; p.said = ''; p.score = 0;
-      p.tellKind = '';
+      p.tellKind = ''; p.saidKind = '';
       if (p.bot) { p.bot.mood = null; p.bot.plan = null; }
     });
     G.hand++;
@@ -1217,145 +1261,199 @@
         banner('Final table', aliveNow + ' players left', 'win');
       }
     }
-    G.over = false; G.board = []; G.hl = null; G.minRaise = G.bb; G.cur = 0; G.acting = -1;
+    G.over = false; G.board = []; G.hl = null; G.showPot = null;
+    G.minRaise = G.bb; G.cur = 0; G.acting = -1; G.turn = -1; G.pending = null;
+    G.lastRaiser = null;
     const potEl = $('#pot');
     if (potEl) potEl.classList.remove('collect', 'bump');
     lastPot = 0;
-    G.dealer = next(G.dealer < 0 ? P.length - 1 : G.dealer, (p) => !p.out);
+
+    const T = ensureEngine();
+    const prePlayers = T.players.map((p) => ({ id: p.id, name: p.name, stack: p.stack }));
+    const start = T.startHand();
+    if (start && start.over) { G.over = true; render(); return; }
+    G.replay = {
+      hand: G.hand, handSeed: T.handSeed, sb: G.sb, bb: G.bb, button: T.button,
+      players: prePlayers, actions: [], mode: G.mode, map: G.map.name, when: Date.now()
+    };
+    syncEngine(T);
     G.hp.hands++;
-    const inPlay = P.filter((p) => !p.out);
-    if (inPlay.length < 2) return;
-    const headsUp = inPlay.length === 2;
-    const sbI = headsUp ? G.dealer : next(G.dealer, (p) => !p.out);
-    const bbI = next(sbI, (p) => !p.out);
-    P[sbI].role = 'SB'; P[bbI].role = 'BB';
-    post(P[sbI], G.sb); post(P[bbI], G.bb);
-    G.deck = C.shuffle(C.makeDeck());
+    P.forEach((p, i) => {
+      p.role = i === T.sbSeat ? 'SB' : i === T.bbSeat ? 'BB' : '';
+    });
     setMode('wait'); status('Dealing\u2026'); render();
-    await sleep(260);
-    for (let r = 0; r < 2; r++) {
-      for (let k = 1; k <= P.length; k++) {
-        const p = P[(G.dealer + k) % P.length];
-        if (p.out) continue;
-        p.hole.push(G.deck.pop());
-        sfx.deal();
-        render();
-        if (p.human) updateHint();
-        await sleep(60);
+    await sleep(240);
+
+    // Deal one card at a time, left of the button, even if a blind is all-in.
+    const holes = T.players.map((ep) => ep.hole.slice());
+    P.forEach((p) => { p.hole = []; });
+    render();
+    let firstSeat = T.nextInHand(T.button);
+    for (let round = 0; round < 2; round++) {
+      let s = firstSeat;
+      for (let k = 0; k < T.players.filter((p) => !p.out).length; k++) {
+        const p = P[s];
+        if (p) { p.hole.push(holes[s][round]); sfx.deal(); render(); }
+        await sleep(55);
+        s = T.nextInHand(s);
       }
     }
     status(''); updateHint(); saveSession();
-    await sleep(180);
+    await sleep(160);
 
-    const firstActor = (from) => {
-      let j = from;
-      for (let k = 0; k < P.length; k++) { if (canAct(P[j])) return j; j = (j + 1) % P.length; }
-      return from;
-    };
-    let first = headsUp ? G.dealer : next(bbI, (p) => !p.out);
-    await betRound(firstActor(first));
-    const streets = [['Flop', 3], ['Turn', 1], ['River', 1]];
-    for (let s = 0; s < 3 && P.filter(alive).length > 1; s++) {
-      if (P.filter(canAct).length <= 1) {
-        if (!P.some((p) => p.reveal)) {
-          P.forEach((p) => { if (alive(p)) p.reveal = true; });
-          render(); status('All-in \u2014 cards up.'); await sleep(delay());
-        }
-      }
-      for (let k = 0; k < streets[s][1]; k++) {
-        G.board.push(G.deck.pop());
-        sfx.deal(); render();
-        if (G.hero.hole.length) updateHint();
-        await sleep(130);
-      }
-      if (P.filter(canAct).length > 1) {
-        status(streets[s][0]);
-        await betRound(firstActor(next(G.dealer, () => true)));
+    while (!T.result) {
+      const seat = T.acting;
+      if (seat == null || seat < 0) break;
+      const legal = T.legalActions(seat);
+      if (!legal) break;
+      const p = P[seat];
+      G.turn = seat; G.acting = seat; render();
+      const beforeCur = G.cur;
+      const pre = T.board.length === 0;
+      let a;
+      if (p.human) {
+        if (legal.toCall > 0) G.hp.faced++;
+        a = await askHuman(p, legal);
+        if (legal.toCall > 0 && a.type === 'fold') G.hp.foldFaced++;
+        recordHuman(p, a, legal, beforeCur);
       } else {
-        await sleep(delay() * 0.8);
+        await sleep(delay() * (0.55 + Math.random() * 0.8) * (p.bot.pace || 1));
+        a = legalize(botDecide(p, legal), legal);
+        p.bot.seen++; p.bot.hands++;
+        if (pre) {
+          p.bot.preDecisions++;
+          if (a.type === 'raise') p.bot.pfrCount++;
+          if (a.type !== 'fold') p.bot.vpipCount++;
+        } else {
+          p.bot.postDecisions++;
+          if (a.type === 'raise') p.bot.aggrCount++;
+        }
+        botTell(p, a);
+        if (a.type === 'fold' && Math.random() < 0.25) botSay(p, 'fold');
+        else if (a.type === 'raise' && Math.random() < 0.3) botSay(p, 'raise');
+        else if (a.type === 'call' && legal.toCall === 0 && Math.random() < 0.2) botSay(p, 'call');
+      }
+      G.turn = -1; G.acting = -1;
+
+      const boardBefore = T.board.length;
+      const streetBefore = T.street;
+      T.act(seat, a);
+      if (G.replay) {
+        G.replay.actions.push({
+          seat,
+          action: (a.type === 'raise' || a.type === 'bet')
+            ? { type: a.type, to: a.to } : { type: a.type }
+        });
+      }
+      syncEngine(T, boardBefore);
+      const entry = T.log[T.log.length - 1] || { paid: 0 };
+      const paid = entry.paid || 0;
+
+      // Labels and sound are presentation only; the engine already ruled.
+      if (a.type === 'fold') { p.tag = 'Fold'; sfx.fold(); }
+      else if (a.type === 'call' || a.type === 'check') {
+        p.tag = paid ? 'Call ' + fmt(paid) : 'Check';
+        if (paid) { chipFlight(p, paid); sfx.chip(); } else sfx.check();
+      } else if (a.type === 'raise' || a.type === 'bet') {
+        p.tag = (beforeCur <= 0 ? 'Bet ' : 'Raise ') + fmt(a.to);
+        if (paid) chipFlight(p, paid);
+        if (p.allin) sfx.allin(); else sfx.raise();
+      }
+      render();
+
+      if (T.board.length > boardBefore) {
+        for (let k = boardBefore; k < T.board.length; k++) {
+          G.board.push(T.board[k]);
+          sfx.deal(); render();
+          await sleep(125);
+        }
+        if (streetBefore !== T.street) status(T.street.charAt(0).toUpperCase() + T.street.slice(1));
+      }
+      observeAction(p, a, legal.toCall > 0, pre);
+      syncEngine(T);
+      render();
+      updateHint();
+      status('');
+      if (!p.human) await sleep(Math.min(260, delay() * 0.3));
+    }
+
+    await finishHand(T.result);
+  }
+
+  async function finishHand(res) {
+    const P = G.players;
+    if (!res) return;
+    G.over = true; G.turn = -1; G.acting = -1;
+    syncEngine(G.engine);
+    G.cur = 0; G.minRaise = G.bb;
+    P.forEach((p) => {
+      p.bet = 0; p.total = 0; p.allin = false;
+      p.out = p.chips <= 0;
+      p.win = false;
+    });
+    if (res.showdown) {
+      (res.hands || []).forEach((h) => {
+        const p = P[h.seat];
+        if (p) { p.reveal = true; p.score = h.score; }
+      });
+      noteShowdowns();
+      const topWin = (res.winners || []).slice().sort((a, b) => b.amount - a.amount)[0];
+      if (topWin) {
+        G.hl = new Set(C.bestFive(P[topWin.seat].hole.concat(G.board)));
       }
     }
-    await showdown();
-    G.turn = -1; G.acting = -1; render();
-    saveSession();
-  }
-
-  function resolvePot(showdown) {
-    const P = G.players;
-    if (showdown) P.forEach((p) => { if (alive(p)) p.score = C.evaluate(p.hole.concat(G.board)); });
-    const levels = Array.from(new Set(P.filter((p) => p.total > 0).map((p) => p.total))).sort((a, b) => a - b);
-    let prev = 0, carry = 0;
-    const won = new Map();
-    let bestWinners = [];
-    levels.forEach((lvl) => {
-      let amt = carry; carry = 0;
-      P.forEach((p) => { amt += Math.max(0, Math.min(p.total, lvl) - Math.min(p.total, prev)); });
-      prev = lvl;
-      const elig = P.filter((p) => alive(p) && p.total >= lvl);
-      if (!elig.length) { carry = amt; return; }
-      let winners = elig;
-      if (showdown) {
-        const best = Math.max(...elig.map((p) => p.score));
-        winners = elig.filter((p) => p.score === best);
-        if (!bestWinners.length) bestWinners = winners;
-      } else if (!bestWinners.length) bestWinners = winners;
-      const share = Math.floor(amt / winners.length);
-      let rem = amt - share * winners.length;
-      winners.forEach((p) => {
-        const g = share + (rem > 0 ? 1 : 0);
-        rem = Math.max(0, rem - 1);
-        won.set(p, (won.get(p) || 0) + g);
-      });
-    });
-    return { won, bestWinners };
-  }
-
-  async function showdown() {
-    const P = G.players;
-    const contenders = P.filter(alive);
-    const sd = contenders.length > 1;
-    G.over = true;
-    if (sd) P.forEach((p) => { if (alive(p)) p.reveal = true; });
-    const { won, bestWinners } = resolvePot(sd);
+    (res.winners || []).forEach((w) => { if (P[w.seat]) P[w.seat].win = true; });
+    G.showPot = res.pot || 0;
     sfx.pot();
     $('#pot').classList.add('collect');
-    if (sd) noteShowdowns();
-    won.forEach((amt, p) => { p.chips += amt; p.win = true; });
-    P.forEach((p) => { p.allin = false; });
-    if (sd && bestWinners && bestWinners.length) {
-      G.hl = new Set(C.bestFive(bestWinners[0].hole.concat(G.board)));
-    }
-    P.forEach((p) => { p.bet = 0; p.tag = ''; });
-    const heroWon = won.has(G.hero);
-    const heroGain = won.get(G.hero) || 0;
-    let top = null, topAmt = 0;
-    won.forEach((amt, p) => { if (amt > topAmt) { topAmt = amt; top = p; } });
+    render();
+    updateHint();
+    await sleep(420);
+
+    const heroWin = (res.winners || []).find((w) => w.seat === 0);
+    const heroGain = heroWin ? heroWin.amount : 0;
+    const heroHand = res.showdown && G.hero.score ? C.handName(G.hero.score) : '';
     career.hands++;
-    if (heroWon) {
+    if (heroGain > 0) {
       career.won++;
       career.bestPot = Math.max(career.bestPot, heroGain);
-      if (sd && bestWinners && bestWinners[0] === G.hero) {
-        career.bestHand = C.handName(C.evaluate(G.hero.hole.concat(G.board)));
+      if (heroHand && G.hero.score === Math.max(...(res.hands || []).map((h) => h.score))) {
+        career.bestHand = heroHand;
       }
       addXp(18 + Math.min(60, Math.round(heroGain / Math.max(1, G.bb))));
       sfx.win(); buzz([35, 55, 35]);
-      banner('You win ' + fmt(heroGain), sd ? C.handName(C.evaluate(G.hero.hole.concat(G.board))) : 'Everyone folded', 'win');
-      status('You take ' + fmt(heroGain) + (sd ? ' with ' + C.handName(C.evaluate(G.hero.hole.concat(G.board))).toLowerCase() : ' \u2014 everyone folded'), true);
+      banner('You win ' + fmt(heroGain), heroHand || 'Everyone folded', 'win');
+      status('You take ' + fmt(heroGain) + (heroHand ? ' with ' + heroHand.toLowerCase() : ' \u2014 everyone folded'), true);
     } else {
-      if (sd && top) {
-        const nm = top.human ? 'You' : top.name;
-        banner(nm + ' wins ' + fmt(topAmt), C.handName(top.score), 'lose');
-        status(nm + ' wins ' + fmt(topAmt) + ' with ' + C.handName(top.score).toLowerCase(), true);
-        if (!top.human) botSay(top, 'win');
-      } else if (top) {
-        banner(top.name + ' wins ' + fmt(topAmt), 'Everyone else folded', 'lose');
-        status(top.name + ' takes it down', true);
+      const topWin = (res.winners || []).slice().sort((a, b) => b.amount - a.amount)[0];
+      if (topWin) {
+        const p = P[topWin.seat];
+        const nm = p && p.human ? 'You' : (p ? p.name : 'Seat');
+        const h = (res.hands || []).find((x) => x.seat === topWin.seat);
+        banner(nm + ' wins ' + fmt(topWin.amount), h ? C.handName(h.score) : 'Everyone folded', 'lose');
+        status(nm + ' wins ' + fmt(topWin.amount) + (h ? ' with ' + C.handName(h.score).toLowerCase() : ''), true);
+        if (p && !p.human) botSay(p, 'win');
       }
       addXp(6);
       if (G.hero.folded || G.hero.chips === 0) sfx.lose();
     }
+    if (G.replay) {
+      saveReplay(Object.assign({}, G.replay, {
+        result: {
+          showdown: !!res.showdown, board: (res.board || []).slice(), pot: res.pot,
+          winners: res.winners, pots: res.pots
+        },
+        when: Date.now()
+      }));
+      G.replay = null;
+    }
     saveCareer();
+    saveSession();
     render();
+    await sleep(650);
+    G.showPot = 0;
+    render();
+    updateHint();
   }
 
   /* ================= session loop ================= */
@@ -1368,7 +1466,7 @@
         G.running = true;
         saveSession();
         if (G.tournament) {
-          const bustedBots = G.players.filter((p) => !p.human && p.chips <= 0 && !p.out);
+          const bustedBots = G.players.filter((p) => !p.human && p.chips <= 0 && !p.place);
           const aliveNow = G.players.filter((p) => p.chips > 0).length;
           if (bustedBots.length) {
             bustedBots.forEach((p, k) => {
@@ -1669,6 +1767,7 @@
   }
   window.__hld = {
     G, S, career, startSession, MAPS, sfx, audio, churnLineup, cardHTML, makeCardEl,
+    engine: () => G.engine,
     graph: () => ({ ac, master, comp })
   };
 })();

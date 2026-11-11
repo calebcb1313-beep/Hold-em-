@@ -1,47 +1,112 @@
 # Hold'em Royale
 
-Offline no-limit Texas Hold'em in plain HTML/CSS/JS, wrapped as an Android app.
+A complete no-limit Texas Hold'em game in plain HTML/CSS/JS, with a pure rules engine,
+thinking AI opponents, and an Android WebView wrapper.
 
-- `www/` is the whole game. Open `www/index.html` in a browser to play.
-- `android/` is a thin WebView host that loads `android/app/src/main/assets/www/`.
+## Run it
 
-## What is in the game
+No build step or dependencies:
 
-- **Career map** — six cash tables from a hometown game to the Legends Room. Buy in, grow your stack to the
-  goal, cash out, unlock the next room. Your bankroll carries between tables; busting costs the buy-in.
-- **Tournaments** — a six-player sit and go at every unlocked room. Equal stacks, blinds up every eight hands,
-  eliminations, a final table, winner takes the prize and a trophy for that circuit.
-- **Opponents with personalities** — sharks, nits, calling stations, maniacs, bullies, trappers and more.
-  Names, looks and playing styles are generated per table, and every bot re-rolls its mood each hand.
-- **Adaptive bots with memory** — each bot keeps a private book on every opponent (how often they fold to
-  bets, how often they call, how aggressive they are, what they show down) and adjusts its bluffs, calls and
-  value bets. Shove every hand and they notice, widen up and start calling.
-- **Progression** — XP and levels, stats, best hand, best pot, table clears and tournament trophies.
+```bash
+cd www
+python3 -m http.server 8000
+# open http://127.0.0.1:8000
+```
 
-## Build the APK
+Opening `www/index.html` directly also works; the service worker is skipped for `file://`.
 
-The workflow in `.github/workflows/apk.yml` builds a debug APK on every push to `main`
-(Actions → latest run → Artifacts → `holdem-royale-apk`).
+## Test the rules
 
-To also build a signed release APK and Play Store AAB, add these repository secrets:
-`RELEASE_KEYSTORE_BASE64` (base64 of the keystore), `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`,
-`RELEASE_KEY_PASSWORD`. Without them the workflow only builds the debug APK.
+```bash
+node tools/engine-test.js
+```
+
+The suite covers hand categories, kickers, wheel straights, ties, side pots, folded
+chips, odd chips, minimum raises, illegal actions, heads-up blinds, short all-ins that
+do not reopen betting, full raises that do, all-in calls, blind all-ins, folded-pot
+reporting, deterministic shuffles, exact replay reconstruction, and **3,000 simulated
+AI-vs-AI hands with a chip-conservation check after every action and settlement**.
+
+Browser UI assertions (real game in a 390px iframe, checking the raise panel and a
+reconstructed four-way all-in replay):
+
+```bash
+bash tools/ui-test.sh
+# open http://127.0.0.1:8000/_uitest.html and wait for UI TEST PASS
+```
+
+## Architecture
+
+- `www/engine.js` — the authoritative rules engine. It has no DOM, timers, or AI.
+  `Table.legalActions(seat)` computes every legal move from state; `Table.act()` rejects
+  anything else. The shuffle is seeded, so a hand can be reproduced exactly.
+- `www/poker-core.js` — cards, seeded shuffle, hand evaluator, names, equity helper.
+- `www/bots.js` — opponent personalities, ranges, pot-odds decisions, memory, tells.
+- `www/game.js` — UI, animation, sound, career/tournament flow. It renders engine state
+  and only submits actions the engine reports as legal, and records each hand for replay.
+- `www/replay.js` — reconstructs recorded hands from their seed and action log and shows
+  every step, including side pots and winners.
+- `www/theme.css`, `style.css`, `skin.css` — generated cards, chips, felt, saloon art,
+  responsive layout, reduced-motion handling.
+- `tools/engine-test.js` — rules and conservation tests.
+- `android/` — thin WebView host; `tools/sync-web.sh` copies `www/` into its assets.
+
+### Rules implemented
+
+- Button and blinds rotate every hand. Heads-up: the button posts the small blind,
+  acts first pre-flop, and acts last after the flop.
+- Pre-flop, flop, turn, river, showdown; one card burns before each community street.
+- No-limit betting with strict minimum raises. A full raise reopens action; a short
+  all-in raise does not reopen raising for players who have already acted.
+- Side pots from total contributions, including dead folded chips. Folded players can
+  never win. Uncalled amounts come back to the bettor.
+- Standard five-card ranking with kickers and split pots.
+- **Odd-chip rule:** a remainder is awarded one chip at a time in clockwise order
+  starting with the first seat left of the button.
+- Every settlement asserts that the sum of all stacks equals the table total.
+- A player with no chips is marked out and cannot be dealt in; cash tables seat a
+  replacement, while tournaments record the finishing place.
+
+## Assumptions
+
+- Chips are integers; there are no antes, straddles, or run-it-twice deals.
+- In cash games the roster can change between hands, so a replacement player's buy-in
+  changes the table total *between* hands. Within every hand, and at every settlement,
+  chips are conserved exactly. Tournaments keep a fixed field and total.
+- The engine's odd-chip order is the documented house rule above; it applies to every
+  side pot independently.
+
+## Hand replays
+
+The last twelve hands are saved locally with the per-hand seed, starting stacks, button,
+and every engine-validated action. Choose **Replays** in the main menu to open a hand and
+step through the deal, betting, board, side pots and result. Replays are reconstructed by
+the same engine, so they are exact rather than a video recording.
+
+## Opponents and presentation
+
+Each bot has a distinct temperament (tight-aggressive, loose-passive, maniac, trapper,
+calling station, bully) expressed through range width, aggression, bluff frequency,
+fold-to-pressure and trap rates. Decisions use hand strength, position, pot odds, stack
+depth, betting history, and a private read on each opponent. Bots pause for a
+human-feeling beat, vary that beat with decision difficulty, and talk at the table.
+
+The interface uses a walnut-and-brass saloon palette with generated SVG/CSS cards,
+chips, portraits, and table furniture. Turn, fold, all-in, win, and urgency states each
+pair color with text, shape, or motion. Controls are touch-sized, with a raise slider,
+Min/½-pot/Pot/All-in presets, and `prefers-reduced-motion` support.
+
+## Build the Android app
+
+The workflow in `.github/workflows/apk.yml` builds on every push to `main`.
 
 Locally, with JDK 17 and Android SDK (platform 34, build-tools 34.0.0):
 
 ```bash
-bash tools/build-apk.sh      # Gradle-free debug build -> holdem-royale.apk
-```
-
-Or with Gradle:
-
-```bash
 bash tools/sync-web.sh
-cd android && ./gradlew assembleRelease bundleRelease
+cd android
+./gradlew assembleRelease bundleRelease
 ```
 
-Release signing reads `android/keystore.properties` (git-ignored), which points at a keystore outside git.
-Keep both files safe: a Play Store listing must be signed with the same key for every update. The local
-keystore generated for this workspace is `tools/release.keystore`; back it up before publishing.
-
-After editing anything in `www/`, run `bash tools/sync-web.sh` (the Gradle workflow does this for you).
+Release signing reads `android/keystore.properties` (git-ignored). Keep the keystore and
+its passwords safe; every Play Store update must use the same key.
