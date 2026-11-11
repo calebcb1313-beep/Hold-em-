@@ -169,16 +169,37 @@
     [[1, 1], [3, 1], [1, 3], [3, 3], [1, 5], [3, 5], [1, 7], [3, 7], [2, 2], [2, 6]],
     null, null, null, [[2, 4]]
   ];
+  // Pips are drawn in a fixed viewBox so they scale with the card and can
+  // never spill past the border, whatever the card width.
+  function pipArt(r, suit) {
+    const P = {
+      0: [[30, 28], [30, 66]],
+      1: [[30, 24], [30, 46], [30, 68]],
+      2: [[18, 28], [42, 28], [18, 66], [42, 66]],
+      3: [[18, 24], [42, 24], [30, 46], [18, 68], [42, 68]],
+      4: [[18, 24], [42, 24], [18, 46], [42, 46], [18, 68], [42, 68]],
+      5: [[18, 24], [42, 24], [18, 46], [42, 46], [18, 68], [42, 68], [30, 35]],
+      6: [[18, 24], [42, 24], [18, 46], [42, 46], [18, 68], [42, 68], [30, 35], [30, 57]],
+      7: [[18, 24], [42, 24], [18, 42], [42, 42], [18, 60], [42, 60], [18, 78], [42, 78], [30, 51]],
+      8: [[18, 24], [42, 24], [18, 42], [42, 42], [18, 60], [42, 60], [18, 78], [42, 78], [30, 33], [30, 69]],
+      9: [[18, 22], [42, 22], [18, 36], [42, 36], [18, 50], [42, 50], [18, 64], [42, 64], [18, 78], [42, 78]],
+      10: [[18, 20], [42, 20], [18, 33], [42, 33], [18, 46], [42, 46], [18, 59], [42, 59], [18, 72], [42, 72]],
+      12: [[30, 46]]
+    };
+    const pts = P[r] || [];
+    if (r === 12) {
+      return '<div class="pips"><svg class="pip-art" viewBox="0 0 60 92" aria-hidden="true">' +
+        '<text x="30" y="61" text-anchor="middle" font-size="31" fill="currentColor">' + suit + '</text></svg></div>';
+    }
+    return '<div class="pips"><svg class="pip-art" viewBox="0 0 60 92" aria-hidden="true">' +
+      pts.map(([x, y]) => '<text x="' + x + '" y="' + (y + 4) + '" text-anchor="middle" font-size="9.4" fill="currentColor">' + suit + '</text>').join('') +
+      '</svg></div>';
+  }
   function cardHTML(c) {
     const r = c >> 2, suit = C.SUITS[c & 3];
     const idx = '<i class="r">' + C.RANK_CH[r] + '</i><i class="s">' + suit + '</i>';
-    if (r >= 9 && r <= 11) {
-      return idx + '<div class="pips court"><b>' + C.RANK_CH[r] + '</b>' +
-        '<i class="up">' + suit + '</i><i class="dn">' + suit + '</i></div>';
-    }
-    const lay = PIPS[r] || [];
-    return idx + '<div class="pips' + (r === 12 ? ' ace' : '') + '">' +
-      lay.map(([x, y]) => '<i style="--x:' + x + ';--y:' + y + '">' + suit + '</i>').join('') + '</div>';
+    if (r >= 9 && r <= 11) return idx + window.Courts.art(r, suit);
+    return idx + pipArt(r, suit);
   }
   function makeCardEl(c, cls) {
     const e = document.createElement('div');
@@ -759,6 +780,9 @@
       el.classList.toggle('acting', G.acting === i);
       $('.dealer', el).hidden = G.dealer !== i || p.out;
       $('.tag', el).textContent = p.tag || '';
+      el.classList.toggle('tell-strong', p.saidKind === 'tell' && p.tellKind === 'strong');
+      el.classList.toggle('tell-weak', p.saidKind === 'tell' && p.tellKind === 'weak');
+      el.classList.toggle('tell-bluff', p.saidKind === 'tell' && p.tellKind === 'bluff');
       const say = $('.say', el);
       say.textContent = p.said || '';
       say.classList.toggle('on', !!p.said);
@@ -891,13 +915,14 @@
     render();
   }
   // RDR2-style tell: a short physical habit shown before the action lands.
-  function botTell(p) {
+  function botTell(p, a) {
     if (!p.bot || !p.bot.tell) return;
     p.said = p.bot.tell;
     p.saidKind = 'tell';
+    p.tellKind = B.tellState ? B.tellState(p.bot, a) : '';
     p.bot.tell = '';
     setTimeout(() => {
-      if (p.saidKind === 'tell') { p.said = ''; p.saidKind = ''; render(); }
+      if (p.saidKind === 'tell') { p.said = ''; p.saidKind = ''; p.tellKind = ''; render(); }
     }, 2600);
     render();
   }
@@ -1141,7 +1166,7 @@
           p.bot.postDecisions++;
           if (a.type === 'raise') p.bot.aggrCount++;
         }
-        botTell(p);
+        botTell(p, a);
         if (a.type === 'fold' && Math.random() < 0.25) botSay(p, 'fold');
         else if (a.type === 'raise' && Math.random() < 0.3) botSay(p, 'raise');
         else if (a.type === 'call' && toCallNoRaise(p) && Math.random() < 0.2) botSay(p, 'call');
@@ -1173,6 +1198,7 @@
       p.out = p.chips <= 0;
       p.hole = []; p.bet = 0; p.total = 0; p.folded = p.out; p.allin = false;
       p.tag = ''; p.role = ''; p.reveal = false; p.win = false; p.said = ''; p.score = 0;
+      p.tellKind = '';
       if (p.bot) { p.bot.mood = null; p.bot.plan = null; }
     });
     G.hand++;
@@ -1642,7 +1668,7 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
   window.__hld = {
-    G, S, career, startSession, MAPS, sfx, audio, churnLineup,
+    G, S, career, startSession, MAPS, sfx, audio, churnLineup, cardHTML, makeCardEl,
     graph: () => ({ ac, master, comp })
   };
 })();

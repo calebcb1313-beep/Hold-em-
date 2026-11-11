@@ -485,6 +485,7 @@
       const suited = (hole[0] & 3) === (hole[1] & 3);
       const gap = Math.abs((hole[0] >> 2) - (hole[1] >> 2));
       const conn = !pair && gap <= 2;
+      const broadway = (hole[0] >> 2) >= 8 && (hole[1] >> 2) >= 8;
       const pos = x.late ? 1 : 0;
       const stackBB = myChips / bb;
       const facingRaise = cur > bb;
@@ -533,20 +534,20 @@
       // Chen strength is not equity. A flat 0.82 bar meant only the absolute
       // top of the range answered a raise, so one real bet won every pot.
       const price = toCall / (pot + toCall);
-      const defend = clamp(0.30 + price * 0.55 - pos * 0.04 - stick * 0.16
+      const defend = clamp(0.23 + price * 0.52 - pos * 0.04 - stick * 0.16
         - maniac * 0.12 - (loose - 1) * 0.14 - (aggroRead - 0.35) * 0.08
-        + persona.callMargin * 0.6, 0.12, 0.72);
+        + persona.callMargin * 0.7, 0.1, 0.7);
       const bigOpen = cur > bb * 4;
       if (ps > 0.93 && canRaise && R() < 0.78) return raiseTo(roundBB(Math.max(cur * 3, bb * 9)));
       if (ps > 0.78 && canRaise && R() < aggr * 0.55) return raiseTo(roundBB(cur * 2.8));
       // Big opens are polarised. The aggressive seats punish them instead of
       // handing over the blinds, especially a hero who keeps overbetting.
-      if (bigOpen && canRaise && (suited || pair || conn) &&
-        R() < clamp(0.05 + aggr * 0.12 + (hero.overbets || 0) * 0.16 + persona.bluff * 0.03, 0, 0.4)) {
+      if (bigOpen && canRaise && (suited || pair || conn || broadway) &&
+        R() < clamp(0.09 + aggr * 0.18 + (hero.overbets || 0) * 0.18 + persona.bluff * 0.04, 0, 0.45)) {
         return raiseTo(roundBB(cur * 2.6));
       }
       if (ps > defend) return { type: 'call' };
-      if (bigOpen && (pair || (suited && conn) || ps > 0.42) && R() < 0.55 + stick * 0.3) {
+      if (bigOpen && (pair || suited || conn || broadway || ps > 0.34) && R() < 0.7 + stick * 0.25) {
         return { type: 'call' };
       }
       if (toCall <= bb * 2.5 && (pair || (suited && conn)) && ps > 0.34 && R() < 0.5 + stick * 0.3) {
@@ -629,6 +630,7 @@
     // price made every big bet an uncontested win; bluff-catchers now look it
     // up, and seats that have watched the hero overbet do it more often.
     const overbet = toCall > pot * 0.8;
+    if (overbet) need = Math.max(0.22, need - 0.13 - stick * 0.2 - (hero.overbets || 0) * 0.22);
     if (mood.gear === 'loose') need -= 0.055;
     if (mood.gear === 'trap') need += 0.02;
     if (mood.gear === 'value' && !draw && made <= 1) need += 0.04;
@@ -671,7 +673,7 @@
     if (made >= 1 && callEq > need - 0.06 && R() < 0.4 + bot.callDown * 0.3) {
       return { type: 'call' };
     }
-    if (overbet && made >= 1 && R() < 0.3 + bot.callDown * 0.35 + (hero.overbets || 0) * 0.25) {
+    if (overbet && made >= 1 && R() < 0.4 + bot.callDown * 0.4 + (hero.overbets || 0) * 0.25) {
       return { type: 'call' };
     }
     if (bot.quirkId === 'floater' && street === 1 && toCall < pot * 0.42 && R() < 0.42) {
@@ -714,7 +716,7 @@
   }
 
   const api = {
-    ARCH, makeBot, makeRoster, newMood, read, readLive, decide, tellFor, chatFor, genName,
+    ARCH, makeBot, makeRoster, newMood, read, readLive, decide, tellFor, tellState, chatFor, genName,
     noteAction, noteShowdown, readsFor
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

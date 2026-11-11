@@ -190,8 +190,10 @@
 /* printed card faces: rank pips, not a letter in a box */
 .card.up .s{right:auto;left:9%;top:calc(var(--cw)*.47);bottom:auto;
   font-size:calc(var(--cw)*.22);opacity:.9}
-.card .pips{position:absolute;inset:26% 14% 12%;display:grid;pointer-events:none;
-  grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(7,1fr);color:#20262a}
+.card .pips{position:absolute;inset:4% 3% 3%;display:block;pointer-events:none}
+.pip-art{width:100%;height:100%;display:block;overflow:visible}
+.card .r{font-size:calc(var(--cw)*.31);left:7%;top:2%;letter-spacing:-.04em}
+.card.up .s{top:calc(var(--cw)*.42);font-size:calc(var(--cw)*.17)}
 .card .pips i{grid-column:var(--x);grid-row:var(--y);display:grid;place-items:center;
   font-style:normal;font-size:calc(var(--cw,46px)*.19);line-height:1;opacity:.92}
 .card .pips.ace i{font-size:calc(var(--cw,46px)*.5)}
@@ -213,3 +215,59 @@ body.four .card.s3 .pips{color:#2f7d4f}
 .card.back:after{content:"\2660";display:grid;place-items:center;
   font-size:calc(var(--cw,46px)*.34);color:rgba(240,217,164,.42);
   text-shadow:0 1px 0 rgba(0,0,0,.55)}
+
+/* ---------------- illustrated court figures ---------------- */
+.card .pips.court{inset:6% 4% 4%;display:block;color:inherit}
+.court-art{width:100%;height:100%;display:block;overflow:visible}
+.mini .court-art{opacity:.85}
+
+/* ---------------- a table that moves ---------------- */
+.seat .avatar{overflow:hidden}
+.seat .avatar img{transform-origin:50% 62%;animation:breathe 5.6s ease-in-out infinite}
+.seat:nth-child(2) .avatar img{animation-delay:-1.2s}
+.seat:nth-child(3) .avatar img{animation-delay:-2.4s}
+.seat:nth-child(4) .avatar img{animation-delay:-3.6s}
+.seat:nth-child(5) .avatar img{animation-delay:-4.4s}
+@keyframes breathe{
+  0%,100%{transform:translateY(0) scale(1)}
+  50%{transform:translateY(.6px) scale(1.025)}}
+.seat.acting .avatar img{animation:actPulse .7s ease-in-out infinite}
+@keyframes actPulse{
+  0%,100%{filter:brightness(1) saturate(1)}
+  50%{filter:brightness(1.14) saturate(1.08)}}
+.seat.tell-strong .avatar img{animation:tellStrong .95s cubic-bezier(.2,1.5,.3,1)}
+@keyframes tellStrong{
+  0%{transform:none}
+  35%{transform:translateY(-3px) scale(1.11)}
+  100%{transform:none}}
+.seat.tell-weak .avatar img{animation:tellWeak .95s ease}
+@keyframes tellWeak{
+  35%{transform:translateY(2px) scale(.93);filter:grayscale(.35) brightness(.92)}}
+.seat.tell-bluff .avatar img{animation:tellBluff .85s ease}
+@keyframes tellBluff{
+  18%{transform:translateX(-2px) rotate(-3deg)}
+  44%{transform:translateX(2px) rotate(3deg)}
+  70%{transform:translateX(-1px) rotate(-1deg)}
+  100%{transform:none}}
+.seat.tell-strong .plate{box-shadow:0 0 0 1px rgba(255,222,150,.75),0 0 28px rgba(255,198,110,.45),0 2px 0 #100a05}
+.seat.tell-bluff .plate{box-shadow:0 0 0 1px rgba(186,124,214,.55),0 0 24px rgba(150,90,190,.3),0 2px 0 #100a05}
+.seat.tell-weak .plate{filter:saturate(.85)}
+.seat.win .avatar img{animation:winPop .9s cubic-bezier(.2,1.5,.3,1)}
+@keyframes winPop{
+  0%{transform:none}
+  40%{transform:scale(1.14) rotate(-2deg)}
+  100%{transform:none}}
+.table-lamp{animation:sway 7.5s ease-in-out infinite;transform-origin:50% 0}
+@keyframes sway{
+  0%,100%{transform:translateX(-50%) rotate(-.6deg)}
+  50%{transform:translateX(-50%) rotate(.6deg)}}
+.sconce{animation:flicker 4.2s ease-in-out infinite}
+.sconce.r{animation-delay:-2.1s}
+@keyframes flicker{
+  0%,100%{opacity:.92;filter:brightness(1)}
+  38%{opacity:.72;filter:brightness(.86)}
+  62%{opacity:1;filter:brightness(1.08)}}
+@media (prefers-reduced-motion: reduce){
+  .seat .avatar img,.seat.acting .avatar img,.seat.win .avatar img,
+  .table-lamp,.sconce{animation:none}
+}
